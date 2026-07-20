@@ -1,0 +1,278 @@
+// Prisma 7: datasource URL is configured in prisma.config.ts (DIRECT_URL for migrations).
+// Runtime client uses DATABASE_URL (pooled, port 6543) via @prisma/adapter-pg in src/index.ts.
+//
+// CRITICAL MULTI-TENANCY: Every query against tenant-scoped models MUST filter by tenantId.
+// Treat any missing tenant filter as a critical security bug.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN // Platform operator — no school tenant; manages all tenants
+  ADMIN       // School admin — scoped to a single tenant
+  TEACHER
+  PARENT
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  GRADED
+  LATE
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum AgentLogStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model Tenant {
+  id               String   @id @default(cuid())
+  name             String
+  subdomain        String   @unique
+  subscriptionTier String  @default("FREE")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  profiles     Profile[]
+  students     Student[]
+  parentStudents ParentStudent[]
+  classes      Class[]
+  attendances  Attendance[]
+  grades       Grade[]
+  assignments  Assignment[]
+  submissions  Submission[]
+  notifications Notification[]
+  agentLogs    AgentLog[]
+
+  @@index([subdomain])
+}
+
+model Profile {
+  id        String   @id // UUID matching Supabase auth.users.id
+  /// Null only for SUPER_ADMIN (platform-wide). School roles MUST set tenantId.
+  tenantId  String?
+  email     String
+  role      Role
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant              Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  taughtClasses       Class[]          @relation("ClassTeacher")
+  markedAttendances   Attendance[]     @relation("AttendanceMarker")
+  assignments         Assignment[]     @relation("AssignmentTeacher")
+  parentLinks         ParentStudent[]  @relation("ParentProfile")
+  notifications       Notification[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, role])
+  @@index([role])
+  @@index([email])
+}
+
+model Student {
+  id              String    @id @default(cuid())
+  tenantId        String
+  name            String
+  admissionNumber String
+  classId         String?
+  dateOfBirth     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class          Class?          @relation(fields: [classId], references: [id], onDelete: SetNull)
+  parentLinks    ParentStudent[]
+  attendances    Attendance[]
+  grades         Grade[]
+  submissions    Submission[]
+
+  @@unique([tenantId, admissionNumber])
+  @@index([tenantId])
+  @@index([tenantId, classId])
+}
+
+model ParentStudent {
+  id              String   @id @default(cuid())
+  tenantId        String
+  parentProfileId String
+  studentId       String
+  createdAt       DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent  Profile @relation("ParentProfile", fields: [parentProfileId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, parentProfileId, studentId])
+  @@index([tenantId])
+  @@index([tenantId, parentProfileId])
+  @@index([tenantId, studentId])
+}
+
+model Class {
+  id               String   @id @default(cuid())
+  tenantId         String
+  name             String
+  gradeLevel       String
+  teacherProfileId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacher    Profile?     @relation("ClassTeacher", fields: [teacherProfileId], references: [id], onDelete: SetNull)
+  students   Student[]
+  assignments Assignment[]
+
+  @@index([tenantId])
+  @@index([tenantId, teacherProfileId])
+}
+
+model Attendance {
+  id                String           @id @default(cuid())
+  tenantId          String
+  studentId         String
+  date              DateTime         @db.Date
+  status            AttendanceStatus
+  markedByProfileId String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  markedBy  Profile? @relation("AttendanceMarker", fields: [markedByProfileId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, studentId, date])
+  @@index([tenantId])
+  @@index([tenantId, date])
+  @@index([tenantId, studentId])
+  @@index([status])
+}
+
+model Grade {
+  id           String   @id @default(cuid())
+  tenantId     String
+  studentId    String
+  subject      String
+  marks        Decimal  @db.Decimal(8, 2)
+  maxMarks     Decimal  @db.Decimal(8, 2)
+  assignmentId String?
+  date         DateTime @db.Date
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, studentId])
+  @@index([tenantId, date])
+  @@index([tenantId, assignmentId])
+}
+
+model Assignment {
+  id               String   @id @default(cuid())
+  tenantId         String
+  classId          String
+  teacherProfileId String
+  title            String
+  description      String?
+  dueDate          DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher     Profile      @relation("AssignmentTeacher", fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+  grades      Grade[]
+
+  @@index([tenantId])
+  @@index([tenantId, classId])
+  @@index([tenantId, teacherProfileId])
+  @@index([tenantId, dueDate])
+}
+
+model Submission {
+  id           String           @id @default(cuid())
+  tenantId     String
+  assignmentId String
+  studentId    String
+  submittedAt  DateTime?
+  fileUrl      String?
+  status       SubmissionStatus @default(DRAFT)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, assignmentId, studentId])
+  @@index([tenantId])
+  @@index([tenantId, assignmentId])
+  @@index([tenantId, studentId])
+  @@index([status])
+}
+
+model Notification {
+  id         String               @id @default(cuid())
+  tenantId   String
+  profileId  String
+  type       String
+  content    String
+  priority   NotificationPriority @default(NORMAL)
+  readStatus Boolean              @default(false)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, profileId])
+  @@index([tenantId, readStatus])
+  @@index([priority])
+}
+
+model AgentLog {
+  id         String         @id @default(cuid())
+  tenantId   String
+  agentId    String
+  action     String
+  status     AgentLogStatus
+  errorLog   String?
+  executedAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, agentId])
+  @@index([tenantId, status])
+  @@index([executedAt])
+}
