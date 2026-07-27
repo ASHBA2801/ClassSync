@@ -1,0 +1,19 @@
+{
+  "name": "classsync",
+  "version": "1.0.0",
+  "description": "ClassSync — AI-Powered School Management Platform",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix Backend install && npm --prefix Frontend-web install && npm --prefix Frontend-mobile install",
+    "dev:backend": "npm --prefix Backend run dev",
+    "dev:web": "npm --prefix Frontend-web run dev",
+    "dev:mobile": "npm --prefix Frontend-mobile run start",
+    "dev:mobile:tunnel": "npm --prefix Frontend-mobile run start:tunnel",
+    "start:backend": "npm --prefix Backend start",
+    "build:web": "npm --prefix Frontend-web run build",
+    "db:migrate": "npm --prefix Backend run db:migrate",
+    "db:deploy": "npm --prefix Backend run db:deploy",
+    "db:seed": "npm --prefix Backend run db:seed",
+    "db:studio": "npm --prefix Backend run db:studio"
+  }
+}

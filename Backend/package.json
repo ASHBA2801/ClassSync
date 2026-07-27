@@ -1,0 +1,29 @@
+{
+  "name": "classsync-backend",
+  "version": "1.0.0",
+  "description": "ClassSync Backend — Express API with PostgreSQL",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "db:generate": "node scripts/prisma-cli.js generate",
+    "db:migrate": "node scripts/prisma-cli.js migrate dev",
+    "db:deploy": "node scripts/prisma-cli.js migrate deploy",
+    "db:push": "node scripts/prisma-cli.js db push",
+    "db:seed": "node -r ./scripts/load-root-env.js prisma/seed.js",
+    "db:studio": "node scripts/prisma-cli.js studio"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.12.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "prisma": "^6.12.0"
+  }
+}

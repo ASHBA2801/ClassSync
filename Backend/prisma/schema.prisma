@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model School {
+  id            String   @id
+  name          String
+  code          String
+  studentsCount Int
+  location      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  students         Student[]
+  grades           Grade[]
+  attendances      Attendance[]
+  homework         Homework[]
+  fees             Fee[]
+  behavioralNotes  BehavioralNote[]
+  alerts           Alert[]
+}
+
+model Student {
+  id             String  @id
+  schoolId       String
+  name           String
+  grade          String
+  parentName     String
+  parentEmail    String
+  attendanceRate Float
+  gpa            String
+  status         String
+
+  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  grades      Grade[]
+  attendances Attendance[]
+  fees        Fee[]
+  notes       BehavioralNote[]
+
+  @@index([schoolId])
+}
+
+model Grade {
+  id          String @id @default(cuid())
+  schoolId    String
+  studentId   String
+  studentName String
+  subject     String
+  score       Float
+  total       Float  @default(100)
+  date        String
+  teacher     String
+  feedback    String @default("")
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([studentId])
+}
+
+model Attendance {
+  id          String @id @default(cuid())
+  schoolId    String
+  studentId   String
+  studentName String
+  date        String
+  status      String
+  session     String @default("Morning")
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, studentId, date])
+  @@index([schoolId])
+}
+
+model Homework {
+  id              String   @id @default(cuid())
+  schoolId        String
+  title           String
+  subject         String
+  dueDate         String
+  status          String
+  assignedTo      String
+  overdueDays     Int      @default(0)
+  pendingStudents String[]
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+model Fee {
+  id            String @id @default(cuid())
+  schoolId      String
+  studentId     String
+  studentName   String
+  amount        Float
+  dueDate       String
+  status        String
+  daysRemaining Int
+  parentContact String
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+model BehavioralNote {
+  id          String @id @default(cuid())
+  schoolId    String
+  studentId   String
+  studentName String
+  note        String
+  date        String
+  author      String
+  sentiment   String
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+model Alert {
+  id          String  @id @default(cuid())
+  schoolId    String?
+  agentName   String
+  agentIcon   String
+  title       String
+  message     String
+  severity    String
+  timestamp   String
+  status      String  @default("Active")
+  actionTaken String
+
+  school School? @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+model AgentConfig {
+  id             String  @id
+  name           String
+  icon           String
+  trigger        String
+  action         String
+  active         Boolean @default(true)
+  executionCount Int     @default(0)
+  lastRun        String
+}
+
+model AgentLog {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  agent     String
+  message   String
+  status    String
+}
