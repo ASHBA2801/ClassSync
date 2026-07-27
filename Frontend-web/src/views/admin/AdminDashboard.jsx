@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { 
   Bell, ShieldAlert, Cpu, CheckCircle2, Play, Power, Calendar, Lock, 
-  TrendingUp, Users, Activity, FileText, AlertTriangle, RefreshCw 
+  TrendingUp, Users, Activity, FileText, AlertTriangle, RefreshCw, Database
 } from 'lucide-react';
 import { toggleAgent, triggerAgent, resolveAlert } from '../../services/api';
 import TimetableSolver from './TimetableSolver';
+import TimetableBuilderView from './TimetableBuilderView';
 import DataIsolation from './DataIsolation';
+import DocumentProcessingView from './DocumentProcessingView';
+import StaffManagementView from './StaffManagementView';
 
 export default function AdminDashboard({ 
   alerts = [], 
@@ -15,7 +18,7 @@ export default function AdminDashboard({
   schools = [],
   refreshData 
 }) {
-  const [activeTab, setActiveTab] = useState('feed'); // 'feed' | 'agents' | 'timetable' | 'isolation'
+  const [activeTab, setActiveTab] = useState('feed'); // 'feed' | 'agents' | 'timetable' | 'isolation' | 'documents' | 'builder' | 'staff'
   const [filterSeverity, setFilterSeverity] = useState('All');
   const [runningAgent, setRunningAgent] = useState(null);
 
@@ -126,7 +129,55 @@ export default function AdminDashboard({
                 color: activeTab === 'timetable' ? '#fff' : '#475569'
               }}
             >
-              <Calendar size={16} /> Timetable Conflict Solver
+              <Calendar size={16} /> Conflict Demo
+            </button>
+            <button
+              onClick={() => setActiveTab('builder')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontSize: '0.88rem',
+                fontWeight: '700',
+                background: activeTab === 'builder' ? '#059669' : 'transparent',
+                color: activeTab === 'builder' ? '#fff' : '#475569'
+              }}
+            >
+              <Calendar size={16} /> CSP Timetable Builder
+            </button>
+            <button
+              onClick={() => setActiveTab('documents')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontSize: '0.88rem',
+                fontWeight: '700',
+                background: activeTab === 'documents' ? '#7C3AED' : 'transparent',
+                color: activeTab === 'documents' ? '#fff' : '#475569'
+              }}
+            >
+              <FileText size={16} /> Document AI
+            </button>
+            <button
+              onClick={() => setActiveTab('staff')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontSize: '0.88rem',
+                fontWeight: '700',
+                background: activeTab === 'staff' ? '#D97706' : 'transparent',
+                color: activeTab === 'staff' ? '#fff' : '#475569'
+              }}
+            >
+              <Users size={16} /> Staff & Resources
             </button>
             <button
               onClick={() => setActiveTab('isolation')}
@@ -398,6 +449,18 @@ export default function AdminDashboard({
 
       {activeTab === 'timetable' && (
         <TimetableSolver />
+      )}
+
+      {activeTab === 'builder' && (
+        <TimetableBuilderView activeSchool={activeSchool} />
+      )}
+
+      {activeTab === 'documents' && (
+        <DocumentProcessingView activeSchool={activeSchool} />
+      )}
+
+      {activeTab === 'staff' && (
+        <StaffManagementView activeSchool={activeSchool} />
       )}
 
       {activeTab === 'isolation' && (

@@ -162,6 +162,32 @@ async function runReportGeneratorAgent(schoolId = "school-a") {
   return { status: "complete", generatedReports: students.length };
 }
 
+async function runPredictiveResourceAgent(schoolId = "school-a") {
+  const analytics = await dataStore.getResourceAnalytics(schoolId);
+  let alertsFired = 0;
+
+  for (const prediction of analytics.predictions) {
+    if (prediction.type === "ALL_CLEAR") continue;
+    const severityMap = { High: "High", Medium: "Medium", Low: "Low" };
+    await addAlert(
+      schoolId,
+      "Resource Predictor",
+      "🔮",
+      `Resource Forecast: ${prediction.type.replace(/_/g, " ")}`,
+      `${prediction.message} Recommendation: ${prediction.recommendation}`,
+      severityMap[prediction.severity] || "Medium",
+      "Forecast Report Generated"
+    );
+    alertsFired++;
+  }
+
+  await logAgentExecution(
+    "Resource Predictor",
+    `Analyzed enrollment & staffing trends for ${schoolId}. Issued ${alertsFired} predictive resource alert(s). Student:Staff ratio = ${analytics.summary.staffRatio}:1.`
+  );
+  return { status: "complete", alertsFired, summary: analytics.summary };
+}
+
 async function runAllAgents(schoolId = "school-a") {
   await runAttendanceMonitor(schoolId);
   await runGradeAlertAgent(schoolId);
@@ -169,6 +195,7 @@ async function runAllAgents(schoolId = "school-a") {
   await runFeeReminderAgent(schoolId);
   await runBehavioralInsightAgent(schoolId);
   await runReportGeneratorAgent(schoolId);
+  await runPredictiveResourceAgent(schoolId);
   return { status: "all_agents_executed" };
 }
 
@@ -182,5 +209,6 @@ module.exports = {
   runFeeReminderAgent,
   runBehavioralInsightAgent,
   runReportGeneratorAgent,
+  runPredictiveResourceAgent,
   runAllAgents,
 };

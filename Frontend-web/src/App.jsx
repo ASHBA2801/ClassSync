@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import LiveAgentStatusBar from './components/LiveAgentStatusBar';
 import Toast from './components/Toast';
+import LoginPortalModal from './components/LoginPortalModal';
+import SuperAdminDashboard from './views/superadmin/SuperAdminDashboard';
 import AdminDashboard from './views/admin/AdminDashboard';
 import TeacherDashboard from './views/teacher/TeacherDashboard';
 import ParentDashboard from './views/parent/ParentDashboard';
@@ -12,9 +14,19 @@ import {
 
 export default function App() {
   const [viewMode, setViewMode] = useState('app'); // 'app' | 'pitch'
-  const [userRole, setUserRole] = useState('admin'); // 'admin' | 'teacher' | 'parent'
+  const [userRole, setUserRole] = useState('admin'); // 'superadmin' | 'admin' | 'teacher' | 'parent'
   const [activeSchool, setActiveSchool] = useState('school-a');
   
+  // Currently authenticated user state
+  const [currentUser, setCurrentUser] = useState({
+    name: 'Dr. Robert Vance',
+    email: 'admin@springfield.edu',
+    role: 'admin',
+    schoolId: 'school-a'
+  });
+
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
   const [schools, setSchools] = useState([]);
   const [students, setStudents] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -71,6 +83,30 @@ export default function App() {
     return () => unsubscribe();
   }, [loadData]);
 
+  // Login & Persona switch handler with auto-redirection
+  const handleLoginSuccess = (userData) => {
+    setCurrentUser(userData);
+    setUserRole(userData.role);
+    if (userData.schoolId) {
+      setActiveSchool(userData.schoolId);
+    }
+    setToast({
+      title: 'Authentication Successful',
+      message: `Logged in as ${userData.name} (${userData.role.toUpperCase()}). Redirected to workspace.`,
+      type: 'info'
+    });
+  };
+
+  const handleSwitchTenantAndRole = (schoolId, role = 'admin') => {
+    setActiveSchool(schoolId);
+    setUserRole(role);
+    setToast({
+      title: 'Context Switched',
+      message: `Switched to School Tenant [${schoolId}] as ${role.toUpperCase()}.`,
+      type: 'info'
+    });
+  };
+
   return (
     <div className="app-container">
       {/* Platform Navigation Header */}
@@ -79,6 +115,8 @@ export default function App() {
         setViewMode={setViewMode}
         userRole={userRole}
         setUserRole={setUserRole}
+        currentUser={currentUser}
+        onOpenLoginModal={() => setIsLoginModalOpen(true)}
         activeSchool={activeSchool}
         setActiveSchool={setActiveSchool}
         schools={schools}
@@ -100,6 +138,16 @@ export default function App() {
           <PitchDeckView />
         ) : (
           <>
+            {userRole === 'superadmin' && (
+              <SuperAdminDashboard
+                activeSchool={activeSchool}
+                setActiveSchool={setActiveSchool}
+                userRole={userRole}
+                setUserRole={setUserRole}
+                onSwitchTenantAndRole={handleSwitchTenantAndRole}
+              />
+            )}
+
             {userRole === 'admin' && (
               <AdminDashboard
                 alerts={alerts}
@@ -130,6 +178,14 @@ export default function App() {
           </>
         )}
       </main>
+
+      {/* Login & Role Redirection Portal Modal */}
+      <LoginPortalModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        currentUser={currentUser}
+        onLoginSuccess={handleLoginSuccess}
+      />
 
       {/* Instant Real-Time Toast Alert */}
       <Toast toast={toast} onClose={() => setToast(null)} />

@@ -24,6 +24,105 @@ model School {
   fees             Fee[]
   behavioralNotes  BehavioralNote[]
   alerts           Alert[]
+  staff            Staff[]
+  rooms            Room[]
+  subjects         Subject[]
+  timetableSlots   TimetableSlot[]
+  documents        Document[]
+}
+
+model Staff {
+  id              String @id @default(cuid())
+  schoolId        String
+  name            String
+  email           String
+  phone           String @default("")
+  department      String
+  qualification   String @default("")
+  subjects        String[] // list of subject IDs they can teach
+  availability    Json   // { "Mon": ["P1","P2"], "Tue": [...], ... }
+  joinDate        String
+  status          String @default("Active")
+
+  school          School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  timetableSlots  TimetableSlot[]
+
+  @@index([schoolId])
+}
+
+model Room {
+  id             String @id @default(cuid())
+  schoolId       String
+  name           String
+  capacity       Int
+  type           String // "Classroom" | "Lab" | "Auditorium" | "Library"
+  floor          String @default("Ground")
+  facilities     String[] // ["Projector", "AC", "Smart Board"]
+  status         String @default("Available")
+
+  school         School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  timetableSlots TimetableSlot[]
+
+  @@index([schoolId])
+}
+
+model Subject {
+  id             String @id @default(cuid())
+  schoolId       String
+  name           String
+  code           String
+  hoursPerWeek   Int    @default(5)
+  grade          String // which grade/class this is for
+  department     String @default("General")
+
+  school         School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  timetableSlots TimetableSlot[]
+
+  @@index([schoolId])
+}
+
+model TimetableSlot {
+  id         String  @id @default(cuid())
+  schoolId   String
+  classSection String  // e.g. "10-A"
+  day        String  // "Mon" | "Tue" | "Wed" | "Thu" | "Fri"
+  period     Int     // 1-8
+  startTime  String  // "09:00"
+  endTime    String  // "10:00"
+  staffId    String?
+  roomId     String?
+  subjectId  String?
+  subjectName String @default("")
+  staffName   String @default("")
+  roomName    String @default("")
+  status     String @default("Scheduled") // "Scheduled" | "Conflict" | "Free"
+  conflictReason String @default("")
+
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff      Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  room       Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  subject    Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, day, period, classSection])
+  @@index([schoolId])
+}
+
+model Document {
+  id              String   @id @default(cuid())
+  schoolId        String
+  fileName        String
+  formType        String   // "admission" | "id_proof" | "marksheet" | "leave_application"
+  uploadedBy      String   @default("Admin")
+  uploadedAt      DateTime @default(now())
+  status          String   @default("Pending") // "Pending" | "Processing" | "Reviewed" | "Written_to_ERP"
+  extractedData   Json?    // structured fields extracted by AI
+  confidence      Float    @default(0)
+  reviewNotes     String   @default("")
+  linkedStudentId String?  // after ERP write
+
+  school          School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
 }
 
 model Student {

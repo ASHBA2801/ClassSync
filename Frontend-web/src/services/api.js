@@ -7,6 +7,49 @@ export async function fetchSchools() {
   return res.json();
 }
 
+export async function addSchool(data) {
+  const res = await fetch(`${BASE_URL}/schools`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateSchool(id, data) {
+  const res = await fetch(`${BASE_URL}/schools/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteSchool(id) {
+  const res = await fetch(`${BASE_URL}/schools/${id}`, { method: "DELETE" });
+  return res.json();
+}
+
+export async function fetchSchoolAdmins() {
+  const res = await fetch(`${BASE_URL}/superadmin/admins`);
+  return res.json();
+}
+
+export async function addSchoolAdmin(data) {
+  const res = await fetch(`${BASE_URL}/superadmin/admins`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function fetchSuperAdminStats() {
+  const res = await fetch(`${BASE_URL}/superadmin/stats`);
+  return res.json();
+}
+
+
 export async function fetchStudents(schoolId) {
   const res = await fetch(`${BASE_URL}/students?schoolId=${schoolId}`);
   return res.json();
@@ -53,6 +96,9 @@ export async function submitHomework(data) {
   });
   return res.json();
 }
+
+export const addHomework = submitHomework;
+
 
 export async function fetchBehavioralNotes(schoolId) {
   const res = await fetch(`${BASE_URL}/behavioral?schoolId=${schoolId}`);
@@ -123,7 +169,137 @@ export async function fetchPitchData() {
   return res.json();
 }
 
-// SSE Real-time Event Listener Setup
+// ─── STAFF ───────────────────────────────────────────────────────────────────
+export async function fetchStaff(schoolId) {
+  const res = await fetch(`${BASE_URL}/staff?schoolId=${schoolId}`);
+  return res.json();
+}
+
+export async function addStaff(data) {
+  const res = await fetch(`${BASE_URL}/staff`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteStaff(id) {
+  const res = await fetch(`${BASE_URL}/staff/${id}`, { method: "DELETE" });
+  return res.json();
+}
+
+// ─── ROOMS ───────────────────────────────────────────────────────────────────
+export async function fetchRooms(schoolId) {
+  const res = await fetch(`${BASE_URL}/rooms?schoolId=${schoolId}`);
+  return res.json();
+}
+
+export async function addRoom(data) {
+  const res = await fetch(`${BASE_URL}/rooms`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+// ─── SUBJECTS ────────────────────────────────────────────────────────────────
+export async function fetchSubjects(schoolId) {
+  const res = await fetch(`${BASE_URL}/subjects?schoolId=${schoolId}`);
+  return res.json();
+}
+
+export async function addSubject(data) {
+  const res = await fetch(`${BASE_URL}/subjects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+// ─── TIMETABLE ───────────────────────────────────────────────────────────────
+export async function fetchTimetable(schoolId, classSection) {
+  const params = new URLSearchParams({ schoolId });
+  if (classSection) params.append("classSection", classSection);
+  const res = await fetch(`${BASE_URL}/timetable?${params}`);
+  return res.json();
+}
+
+export async function generateTimetable(data) {
+  const res = await fetch(`${BASE_URL}/timetable/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function validateTimetable(data) {
+  const res = await fetch(`${BASE_URL}/timetable/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+// ─── DOCUMENTS ───────────────────────────────────────────────────────────────
+export async function fetchDocuments(schoolId) {
+  const res = await fetch(`${BASE_URL}/documents?schoolId=${schoolId}`);
+  return res.json();
+}
+
+export async function processDocument(data) {
+  const res = await fetch(`${BASE_URL}/documents/process`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function reviewDocument(id, data) {
+  const res = await fetch(`${BASE_URL}/documents/${id}/review`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+// ─── STUDENT CRUD ────────────────────────────────────────────────────────────
+export async function addStudent(data) {
+  const res = await fetch(`${BASE_URL}/students`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateStudent(id, data) {
+  const res = await fetch(`${BASE_URL}/students/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteStudent(id) {
+  const res = await fetch(`${BASE_URL}/students/${id}`, { method: "DELETE" });
+  return res.json();
+}
+
+// ─── ANALYTICS ───────────────────────────────────────────────────────────────
+export async function fetchResourceAnalytics(schoolId) {
+  const res = await fetch(`${BASE_URL}/analytics/resources?schoolId=${schoolId}`);
+  return res.json();
+}
+
+
 export function initSSE(onMessageCallback) {
   let eventSource = null;
   try {
