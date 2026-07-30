@@ -24,13 +24,39 @@ A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, 
 
 ## Getting Started
 
+### Option A: Docker (recommended for local dev)
+
+Starts PostgreSQL, Redis, and MinIO (S3-compatible storage):
+
+```bash
+docker compose up -d
+cp .env.docker .env   # or merge into your existing .env
+
+npm install
+npm run db:generate
+npm run db:push
+npm run db:rls
+npm run db:seed
+
+npm run dev           # :3000
+npm run worker        # separate terminal
+```
+
+Docker services:
+
+| Service  | URL / Port                          |
+|----------|-------------------------------------|
+| Postgres | `localhost:5432` (user/pass: `postgres`/`postgres`, db: `classsync`) |
+| Redis    | `localhost:6379`                    |
+| MinIO    | API `:9000`, Console `:9001` (minioadmin/minioadmin) |
+
+### Option B: Manual setup
+
 ### Prerequisites
 
 - Node.js 20+
 - PostgreSQL 15+
 - Redis 7+
-
-### Setup
 
 ```bash
 cp .env.example .env

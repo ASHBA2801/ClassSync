@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import type { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 const publicPaths = ["/login", "/api/auth", "/offline"];
 
