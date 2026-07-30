@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ClassSync — Multi-Tenant School ERP
+
+A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, PostgreSQL RLS, Auth.js, BullMQ, and Razorpay.
+
+## Features
+
+- **Multi-tenancy** with PostgreSQL Row-Level Security (RLS) backstop
+- **Roles:** System Admin, School Admin, Teacher, Parent (students are records, not accounts)
+- **Conflict-free class scheduler** (CSP backtracking solver)
+- **Teacher attendance** with geofence + face recognition queue + retry/escalation flow
+- **Parent portal** for documents, leave requests, fee payments
+- **Per-tenant Razorpay** payment integration with encrypted keys
+- **PWA** with service worker, offline fallback, background sync for attendance
+- **BullMQ workers** for face verification, notifications, scheduler jobs
+
+## Tech Stack
+
+- Next.js 16 (App Router) + TypeScript + Tailwind v4
+- Auth.js v5 (JWT sessions with tenantId, role, permissions)
+- Prisma + PostgreSQL with RLS
+- BullMQ + Redis
+- AWS S3 + Rekognition (pluggable face recognition provider)
+- Razorpay (per-tenant keys)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- PostgreSQL 15+
+- Redis 7+
+
+### Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env
+# Edit DATABASE_URL, REDIS_URL, AUTH_SECRET, ENCRYPTION_KEY
+
+npm install
+npm run db:generate
+npm run db:push
+npm run db:rls    # Apply RLS policies
+npm run db:seed   # Seed demo data + permissions
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Development
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run dev       # Next.js app on :3000
+npm run worker    # BullMQ workers (separate terminal)
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Demo Accounts (after seed)
 
-## Learn More
+| Role | Email | Password |
+|------|-------|----------|
+| System Admin | admin@classsync.app | admin123 |
+| School Admin | schooladmin@demo.com | school123 |
+| Teacher | teacher@demo.com | teacher123 |
+| Parent | parent@demo.com | parent123 |
 
-To learn more about Next.js, take a look at the following resources:
+### Testing
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm test          # Unit tests (geofence, scheduler, encryption, attendance FSM)
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Integration tests for RLS tenant isolation run when `DATABASE_URL` is set.
 
-## Deploy on Vercel
+## Deployment (Railway / Fly.io)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Deploy two services from the same repo:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Web:** `npm run build && npm start`
+2. **Worker:** `npm run worker`
+
+Add managed PostgreSQL and Redis add-ons.
+
+## PWA Notes
+
+- Install via browser "Add to Home Screen"
+- iOS Safari: camera/geolocation work in installed PWA; background push is limited
+- Offline page at `/offline`; attendance syncs via Background Sync API when available
+
+## Project Structure
+
+```
+src/
+├── app/           # Route groups per role portal
+├── actions/       # Server Actions
+├── components/    # UI components
+├── lib/           # Auth, RBAC, DB, scheduler, payments, etc.
+├── workers/       # BullMQ worker process
+└── middleware.ts  # Auth + route protection
+prisma/
+├── schema.prisma
+├── seed.ts
+└── migrations/rls/
+```
