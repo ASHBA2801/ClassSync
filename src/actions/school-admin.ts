@@ -167,8 +167,8 @@ export async function linkGuardianAction(parentId: string, studentId: string, re
 }
 
 const geofenceSchema = z.object({
-  campusLat: z.number(),
-  campusLng: z.number(),
+  campusLat: z.number().min(-90).max(90),
+  campusLng: z.number().min(-180).max(180),
   campusRadiusM: z.number().min(50).max(5000),
 });
 

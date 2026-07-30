@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { onboardSchoolAction } from "@/actions/system-admin";
+import { CampusLocationPicker } from "@/components/campus-location-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,14 +18,22 @@ export function OnboardSchoolForm() {
     setError("");
     const fd = new FormData(e.currentTarget);
 
+    const campusLat = Number(fd.get("campusLat"));
+    const campusLng = Number(fd.get("campusLng"));
+    if (!Number.isFinite(campusLat) || !Number.isFinite(campusLng)) {
+      setError("Please select the campus location on the map.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await onboardSchoolAction({
         name: fd.get("name") as string,
         adminName: fd.get("adminName") as string,
         adminEmail: fd.get("adminEmail") as string,
         adminPassword: fd.get("adminPassword") as string,
-        campusLat: Number(fd.get("campusLat")) || undefined,
-        campusLng: Number(fd.get("campusLng")) || undefined,
+        campusLat,
+        campusLng,
         campusRadiusM: Number(fd.get("campusRadiusM")) || 200,
         timezone: (fd.get("timezone") as string) || "Asia/Kolkata",
         planTier: (fd.get("planTier") as "FREE" | "BASIC" | "PREMIUM" | "ENTERPRISE") || "BASIC",
@@ -43,10 +52,7 @@ export function OnboardSchoolForm() {
       <div><Label>Admin Name</Label><Input name="adminName" required /></div>
       <div><Label>Admin Email</Label><Input name="adminEmail" type="email" required /></div>
       <div><Label>Admin Password</Label><Input name="adminPassword" type="password" required minLength={8} /></div>
-      <div className="grid grid-cols-2 gap-2">
-        <div><Label>Campus Lat</Label><Input name="campusLat" type="number" step="any" /></div>
-        <div><Label>Campus Lng</Label><Input name="campusLng" type="number" step="any" /></div>
-      </div>
+      <CampusLocationPicker />
       <div><Label>Geofence Radius (m)</Label><Input name="campusRadiusM" type="number" defaultValue={200} /></div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {result && <p className="text-sm text-green-600">School created: {result.schoolId}</p>}

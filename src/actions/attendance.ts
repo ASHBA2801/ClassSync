@@ -38,6 +38,7 @@ export async function submitTeacherAttendanceAction(input: z.infer<typeof submit
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
   if (!school) throw new Error("School not found");
 
+  // Compare device GPS (geoLat/geoLng) against campus coords set via Google Maps at registration.
   const geofence = checkGeofence(
     data.geoLat,
     data.geoLng,
