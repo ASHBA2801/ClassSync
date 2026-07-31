@@ -1,5 +1,6 @@
 const EARTH_RADIUS_M = 6371000;
 
+/** Haversine geofence check — no Google Maps API; compares device GPS to stored campus coords. */
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }

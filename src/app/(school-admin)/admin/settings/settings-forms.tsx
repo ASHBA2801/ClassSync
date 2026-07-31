@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { updateGeofenceAction } from "@/actions/school-admin";
 import { savePaymentConfigAction } from "@/actions/payments";
+import { CampusLocationPicker } from "@/components/campus-location-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,26 +23,38 @@ export function SettingsForms({ school }: { school: School | null }) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <Card>
-        <CardHeader><CardTitle>Campus Geofence</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Campus Location</CardTitle></CardHeader>
         <CardContent>
+          <p className="mb-3 text-sm text-zinc-500">
+            Set the institute location using the map. This latitude and longitude are saved and used
+            to verify teacher attendance via device GPS — attendance does not use Google Maps.
+          </p>
           <form
             onSubmit={async (e) => {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
+              const campusLat = Number(fd.get("campusLat"));
+              const campusLng = Number(fd.get("campusLng"));
+              if (!Number.isFinite(campusLat) || !Number.isFinite(campusLng)) {
+                setSaved("geofence-error");
+                return;
+              }
               await updateGeofenceAction({
-                campusLat: Number(fd.get("campusLat")),
-                campusLng: Number(fd.get("campusLng")),
+                campusLat,
+                campusLng,
                 campusRadiusM: Number(fd.get("campusRadiusM")),
               });
               setSaved("geofence");
             }}
             className="space-y-3"
           >
-            <div><Label>Latitude</Label><Input name="campusLat" type="number" step="any" defaultValue={school?.campusLat ?? ""} required /></div>
-            <div><Label>Longitude</Label><Input name="campusLng" type="number" step="any" defaultValue={school?.campusLng ?? ""} required /></div>
+            <CampusLocationPicker defaultLat={school?.campusLat} defaultLng={school?.campusLng} />
             <div><Label>Radius (meters)</Label><Input name="campusRadiusM" type="number" defaultValue={school?.campusRadiusM ?? 200} required /></div>
-            {saved === "geofence" && <p className="text-sm text-green-600">Geofence updated</p>}
-            <Button type="submit">Save Geofence</Button>
+            {saved === "geofence" && <p className="text-sm text-green-600">Campus location updated</p>}
+            {saved === "geofence-error" && (
+              <p className="text-sm text-red-600">Please select the campus location on the map.</p>
+            )}
+            <Button type="submit">Save Location</Button>
           </form>
         </CardContent>
       </Card>

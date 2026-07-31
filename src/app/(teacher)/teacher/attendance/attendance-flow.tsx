@@ -55,6 +55,7 @@ export function AttendanceFlow() {
       return;
     }
 
+    // Device GPS only — campus coords come from Google Maps at school registration.
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const imageBase64 = captureImage();

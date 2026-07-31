@@ -10,8 +10,8 @@ import { slugify } from "@/lib/utils";
 const onboardSchoolSchema = z.object({
   name: z.string().min(2),
   timezone: z.string().default("Asia/Kolkata"),
-  campusLat: z.number().optional(),
-  campusLng: z.number().optional(),
+  campusLat: z.number().min(-90).max(90),
+  campusLng: z.number().min(-180).max(180),
   campusRadiusM: z.number().default(200),
   adminName: z.string().min(2),
   adminEmail: z.string().email(),
