@@ -8,18 +8,9 @@ import {
 } from "@/actions/scheduler";
 import { ScheduleControls } from "./schedule-controls";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const navItems = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/teachers", label: "Teachers" },
-  { href: "/admin/students", label: "Students" },
-  { href: "/admin/classes", label: "Classes" },
-  { href: "/admin/schedule", label: "Schedule" },
-  { href: "/admin/attendance", label: "Attendance" },
-  { href: "/admin/leave", label: "Leave Requests" },
-  { href: "/admin/fees", label: "Fees" },
-  { href: "/admin/settings", label: "Settings" },
-];
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { schoolAdminNav } from "@/lib/nav-config";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -41,50 +32,59 @@ export default async function SchedulePage() {
   });
 
   return (
-    <PortalShell title="Schedule" navItems={navItems} userName={ctx.name}>
+    <PortalShell title="Schedule" navItems={schoolAdminNav} userName={ctx.name}>
       <ScheduleControls periods={periods} />
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>
-            Active Schedule {schedule ? `(v${schedule.version})` : "(none)"}
-          </CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>
+              Active Schedule
+            </CardTitle>
+            {schedule ? (
+              <Badge variant="success">v{schedule.version}</Badge>
+            ) : (
+              <Badge variant="outline">none</Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {!schedule ? (
-            <p className="text-sm text-zinc-500">No schedule generated yet.</p>
+            <p className="text-sm text-text-2 py-4 text-center">No schedule generated yet.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr>
-                    <th className="p-2 text-left">Period</th>
-                    {DAYS.map((d, i) => (
-                      <th key={d} className="p-2 text-left">{d}</th>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">Period</TableHead>
+                    {DAYS.map((d) => (
+                      <TableHead key={d}>{d}</TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {periods.map((p) => (
-                    <tr key={p.periodNo}>
-                      <td className="p-2 font-medium">P{p.periodNo}</td>
+                    <TableRow key={p.periodNo}>
+                      <TableCell className="font-medium">P{p.periodNo}</TableCell>
                       {DAYS.map((_, day) => {
                         const slot = slotsByDay.get(day)?.find((s) => s.periodNo === p.periodNo);
                         return (
-                          <td key={day} className="p-2 text-xs">
+                          <TableCell key={day} className="text-xs">
                             {slot ? (
                               <div>
-                                <p>{slot.subject.name}</p>
-                                <p className="text-zinc-500">{slot.classSection.name}</p>
+                                <p className="font-medium text-text-1">{slot.subject.name}</p>
+                                <p className="text-text-2">{slot.classSection.name}</p>
                               </div>
-                            ) : "-"}
-                          </td>
+                            ) : (
+                              <span className="text-text-2">—</span>
+                            )}
+                          </TableCell>
                         );
                       })}
-                    </tr>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
@@ -93,11 +93,28 @@ export default async function SchedulePage() {
       <Card className="mt-6">
         <CardHeader><CardTitle>Versions</CardTitle></CardHeader>
         <CardContent>
-          {versions.map((v) => (
-            <div key={v.id} className="border-b py-2 text-sm">
-              v{v.version} · {v._count.scheduleSlots} slots · {v.isActive ? "Active" : "Archived"}
-            </div>
-          ))}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Version</TableHead>
+                <TableHead>Slots</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {versions.map((v) => (
+                <TableRow key={v.id}>
+                  <TableCell className="font-medium">v{v.version}</TableCell>
+                  <TableCell>{v._count.scheduleSlots} slots</TableCell>
+                  <TableCell>
+                    <Badge variant={v.isActive ? "success" : "outline"}>
+                      {v.isActive ? "Active" : "Archived"}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </PortalShell>

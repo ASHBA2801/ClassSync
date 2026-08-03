@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import type { Role } from "@prisma/client";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, withSystemAdminContext } from "@/lib/db/prisma";
 import { getPermissionsForRole } from "@/lib/rbac/permissions";
 
 declare module "next-auth" {
@@ -17,6 +17,7 @@ declare module "next-auth" {
     user: User & {
       email: string;
       name: string;
+      sessionStarted?: number;
     };
   }
 }
@@ -31,6 +32,7 @@ declare module "@auth/core/jwt" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
@@ -46,14 +48,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
-          include: {
-            memberships: {
-              where: { isActive: true },
-              include: { school: true },
+        const user = await withSystemAdminContext(async (tx) => {
+          return tx.user.findUnique({
+            where: { email: credentials.email as string },
+            include: {
+              memberships: {
+                where: { isActive: true },
+                include: { school: true },
+              },
             },
-          },
+          });
         });
 
         if (!user) return null;
@@ -106,6 +110,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.role = token.role;
       session.user.schoolId = token.schoolId;
       session.user.permissions = token.permissions;
+      if (token.iat) {
+        session.user.sessionStarted = token.iat * 1000;
+      }
       return session;
     },
   },

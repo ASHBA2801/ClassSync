@@ -6,7 +6,7 @@ DO $$
 DECLARE
   tbl TEXT;
   tables TEXT[] := ARRAY[
-    'Student', 'GuardianRelationship', 'ClassSection', 'Subject',
+    'Student', 'GuardianRelationship', 'Grade', 'GradeSubject', 'ClassSection', 'Subject',
     'TeacherAssignment', 'PeriodTiming', 'ScheduleVersion', 'ScheduleSlot',
     'ScheduleConstraint', 'TeacherAttendance', 'StudentAttendance',
     'LeaveRequest', 'Document', 'FeeStructure', 'FeeInvoice', 'Payment',
@@ -43,10 +43,10 @@ CREATE POLICY membership_isolation ON "UserSchoolMembership" USING (
   OR "schoolId" = NULLIF(current_setting('app.current_school_id', true), '')::uuid
 );
 
--- SchoolPaymentConfig RLS
-ALTER TABLE "SchoolPaymentConfig" ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS payment_config_isolation ON "SchoolPaymentConfig";
-CREATE POLICY payment_config_isolation ON "SchoolPaymentConfig" USING (
+-- SchoolPaymentProviderConfig RLS
+ALTER TABLE "SchoolPaymentProviderConfig" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS payment_config_isolation ON "SchoolPaymentProviderConfig";
+CREATE POLICY payment_config_isolation ON "SchoolPaymentProviderConfig" USING (
   current_setting('app.bypass_rls', true) = 'true'
   OR "schoolId" = NULLIF(current_setting('app.current_school_id', true), '')::uuid
 );

@@ -39,6 +39,10 @@ export default auth((req) => {
     return NextResponse.redirect(new URL(dashboardMap[role] ?? "/login", req.url));
   }
 
+  if (pathname.startsWith("/account")) {
+    return NextResponse.next();
+  }
+
   const hasAccess =
     role === "SYSTEM_ADMIN" ||
     allowedPrefixes.some((prefix) => pathname.startsWith(prefix));
@@ -51,5 +55,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons|images).*)"],
 };

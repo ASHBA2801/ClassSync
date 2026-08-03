@@ -1,7 +1,26 @@
-const CACHE_NAME = "classsync-v1";
+const CACHE_NAME = "classsync-v2";
 const OFFLINE_URL = "/offline";
 
-const APP_SHELL = ["/", "/login", "/offline", "/manifest.json"];
+const APP_SHELL = ["/offline", "/manifest.json"];
+
+function isStaticAsset(url) {
+  return (
+    url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/icons/") ||
+    url.pathname.endsWith(".png") ||
+    url.pathname.endsWith(".ico")
+  );
+}
+
+function isDynamicRequest(url, request) {
+  return (
+    request.mode === "navigate" ||
+    url.pathname.startsWith("/api/") ||
+    request.headers.get("RSC") === "1" ||
+    request.headers.get("Next-Router-State-Tree") != null ||
+    request.headers.get("Next-Router-Prefetch") != null
+  );
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -20,6 +39,9 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(OFFLINE_URL)),
@@ -27,18 +49,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        if (response.ok && event.request.url.startsWith(self.location.origin)) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      });
-    }),
-  );
+  if (isDynamicRequest(url, event.request)) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  if (isStaticAsset(url)) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => cached || fetch(event.request)),
+    );
+    return;
+  }
+
+  event.respondWith(fetch(event.request));
 });
 
 self.addEventListener("sync", (event) => {

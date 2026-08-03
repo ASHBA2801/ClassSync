@@ -1,0 +1,177 @@
+"use client";
+
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  AlertCircle,
+  ArrowRight,
+  Building2,
+  ChevronRight,
+  GraduationCap,
+  Lock,
+  Mail,
+  Shield,
+  Users,
+} from "lucide-react";
+import { credentialsSignInAction } from "@/actions/auth";
+import { PasswordInput } from "@/components/ui/password-input";
+import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
+import styles from "./login.module.css";
+
+const DEMO_ICONS = [Shield, Building2, GraduationCap, Users] as const;
+const DEMO_ICON_CLASSES = [
+  styles.demoIconPurple,
+  styles.demoIconBlue,
+  styles.demoIconTeal,
+  styles.demoIconPink,
+] as const;
+
+function authErrorMessage(code: string | null): string | null {
+  if (!code) return null;
+  if (code === "CredentialsSignin") return "Invalid email or password.";
+  if (code === "MissingCSRF") return "Session expired. Please try again.";
+  return "Sign in failed. Please try again.";
+}
+
+export function LoginForm() {
+  const searchParams = useSearchParams();
+  const urlError = authErrorMessage(searchParams.get("error"));
+  const [formError, setFormError] = useState("");
+  const [loading, setLoading] = useState<string | null>(null);
+  const error = formError || urlError || "";
+
+  async function login(email: string, password: string, schoolId?: string) {
+    setLoading(email);
+    setFormError("");
+
+    const result = await credentialsSignInAction({
+      email,
+      password,
+      schoolId: schoolId || undefined,
+    });
+
+    if (result?.error) {
+      setFormError(result.error);
+      setLoading(null);
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    await login(
+      formData.get("email") as string,
+      formData.get("password") as string,
+      (formData.get("schoolId") as string) || undefined,
+    );
+  }
+
+  return (
+    <>
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <div className={styles.field}>
+          <label htmlFor="email" className={styles.label}>
+            Email
+          </label>
+          <div className={styles.inputWrap}>
+            <Mail className={styles.inputIcon} />
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              placeholder="you@school.com"
+              className={`glass-input ${styles.input}`}
+              disabled={loading !== null}
+            />
+          </div>
+        </div>
+
+        <div className={styles.field}>
+          <label htmlFor="password" className={styles.label}>
+            Password
+          </label>
+          <div className={styles.inputWrap}>
+            <Lock className={styles.inputIcon} />
+            <PasswordInput
+              id="password"
+              name="password"
+              required
+              disabled={loading !== null}
+              className={`glass-input ${styles.input} !pr-10`}
+            />
+          </div>
+        </div>
+
+        <div className={styles.field}>
+          <label htmlFor="schoolId" className={styles.label}>
+            School ID (optional)
+          </label>
+          <div className={styles.inputWrap}>
+            <Building2 className={styles.inputIcon} />
+            <input
+              id="schoolId"
+              name="schoolId"
+              placeholder="Leave blank for demo accounts"
+              className={`glass-input ${styles.input}`}
+              disabled={loading !== null}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className={styles.error}>
+            <AlertCircle className={styles.errorIcon} />
+            {error}
+          </div>
+        )}
+
+        <button type="submit" disabled={loading !== null} className={`btn-gradient ${styles.submitBtn}`}>
+          <Lock size={16} />
+          {loading !== null ? "Signing in…" : "Sign in"}
+          <span className={styles.submitArrow}>
+            <ArrowRight size={16} />
+          </span>
+        </button>
+      </form>
+
+      <div className={styles.demoSection}>
+        <div className={styles.demoDivider}>
+          <div className={styles.demoDividerLine} />
+          <div className={styles.demoDividerLabel}>
+            <span className={styles.demoDividerText}>DEMO LOGINS</span>
+          </div>
+        </div>
+
+        <p className={styles.demoCaption}>One-click sign in with seeded demo accounts</p>
+
+        <ul className={styles.demoList}>
+          {DEMO_ACCOUNTS.map((account, i) => {
+            const Icon = DEMO_ICONS[i];
+            return (
+              <li key={account.email}>
+                <button
+                  type="button"
+                  disabled={loading !== null}
+                  onClick={() => login(account.email, account.password)}
+                  className={styles.demoBtn}
+                >
+                  <div className={`${styles.demoIcon} ${DEMO_ICON_CLASSES[i]}`}>
+                    <Icon className={styles.demoIconSvg} />
+                  </div>
+                  <div className={styles.demoText}>
+                    <div className={styles.demoRole}>{account.role}</div>
+                    <div className={styles.demoEmail}>
+                      {loading === account.email ? "Signing in…" : account.email}
+                    </div>
+                  </div>
+                  <ChevronRight className={styles.demoChevron} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </>
+  );
+}

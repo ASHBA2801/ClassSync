@@ -4,6 +4,7 @@ import { useState } from "react";
 import { saveAIServiceKeyAction } from "@/actions/monitoring";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export function AIKeyForm() {
@@ -26,9 +27,9 @@ export function AIKeyForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div><Label>Provider</Label><Input name="provider" placeholder="aws-rekognition" required /></div>
-      <div><Label>API Key</Label><Input name="key" type="password" required /></div>
+      <div><Label>API Key</Label><PasswordInput name="key" required /></div>
       <div><Label>School ID (optional)</Label><Input name="schoolId" placeholder="Leave empty for platform default" /></div>
-      {saved && <p className="text-sm text-green-600">Key saved</p>}
+      {saved && <p className="text-sm text-success">Key saved</p>}
       <Button type="submit" disabled={loading}>Save Key</Button>
     </form>
   );

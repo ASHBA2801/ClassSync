@@ -3,18 +3,7 @@ import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import { listLeaveRequestsForReviewAction } from "@/actions/parent";
 import { LeaveReviewList } from "./leave-review";
-
-const navItems = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/teachers", label: "Teachers" },
-  { href: "/admin/students", label: "Students" },
-  { href: "/admin/classes", label: "Classes" },
-  { href: "/admin/schedule", label: "Schedule" },
-  { href: "/admin/attendance", label: "Attendance" },
-  { href: "/admin/leave", label: "Leave Requests" },
-  { href: "/admin/fees", label: "Fees" },
-  { href: "/admin/settings", label: "Settings" },
-];
+import { schoolAdminNav } from "@/lib/nav-config";
 
 export default async function LeavePage() {
   const ctx = await getSessionContext();
@@ -23,7 +12,7 @@ export default async function LeavePage() {
   const requests = await listLeaveRequestsForReviewAction();
 
   return (
-    <PortalShell title="Leave Requests" navItems={navItems} userName={ctx.name}>
+    <PortalShell title="Leave Requests" navItems={schoolAdminNav} userName={ctx.name}>
       <LeaveReviewList requests={requests} />
     </PortalShell>
   );

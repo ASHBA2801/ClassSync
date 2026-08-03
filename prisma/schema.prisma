@@ -73,6 +73,13 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum PaymentProvider {
+  RAZORPAY
+  PHONEPE
+  PAYPAL
+  STRIPE
+}
+
 enum NotificationChannel {
   WEB_PUSH
   EMAIL
@@ -99,8 +106,10 @@ model School {
 
   memberships         UserSchoolMembership[]
   students            Student[]
+  grades              Grade[]
   classSections       ClassSection[]
   subjects            Subject[]
+  gradeSubjects       GradeSubject[]
   teacherAssignments  TeacherAssignment[]
   scheduleSlots       ScheduleSlot[]
   scheduleConstraints ScheduleConstraint[]
@@ -113,7 +122,7 @@ model School {
   feeStructures       FeeStructure[]
   feeInvoices         FeeInvoice[]
   payments            Payment[]
-  paymentConfig       SchoolPaymentConfig?
+  paymentProviders    SchoolPaymentProviderConfig[]
   notificationLogs    NotificationLog[]
   auditLogs           AuditLog[]
   aiServiceKeys       AIServiceKey[]
@@ -212,9 +221,27 @@ model GuardianRelationship {
   @@index([schoolId])
 }
 
+model Grade {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSections  ClassSection[]
+  gradeSubjects  GradeSubject[]
+  feeStructures  FeeStructure[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
 model ClassSection {
   id        String   @id @default(uuid()) @db.Uuid
   schoolId  String   @db.Uuid
+  gradeId   String   @db.Uuid
   name      String
   grade     String
   section   String
@@ -222,12 +249,29 @@ model ClassSection {
   updatedAt DateTime @updatedAt
 
   school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gradeRef           Grade               @relation(fields: [gradeId], references: [id], onDelete: Cascade)
   students           Student[]
   teacherAssignments TeacherAssignment[]
   scheduleSlots      ScheduleSlot[]
   feeStructures      FeeStructure[]
 
-  @@unique([schoolId, grade, section])
+  @@unique([schoolId, gradeId, section])
+  @@index([schoolId])
+  @@index([gradeId])
+}
+
+model GradeSubject {
+  id             String @id @default(uuid()) @db.Uuid
+  schoolId       String @db.Uuid
+  gradeId        String @db.Uuid
+  subjectId      String @db.Uuid
+  periodsPerWeek Int    @default(5)
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  grade   Grade   @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([gradeId, subjectId])
   @@index([schoolId])
 }
 
@@ -243,6 +287,7 @@ model Subject {
   school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   teacherAssignments TeacherAssignment[]
   scheduleSlots      ScheduleSlot[]
+  gradeSubjects      GradeSubject[]
 
   @@unique([schoolId, name])
   @@index([schoolId])
@@ -254,6 +299,7 @@ model TeacherAssignment {
   teacherId      String   @db.Uuid
   classSectionId String   @db.Uuid
   subjectId      String   @db.Uuid
+  periodsPerWeek Int?
   createdAt      DateTime @default(now())
 
   school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -425,16 +471,19 @@ model FeeStructure {
   schoolId       String    @db.Uuid
   name           String
   amount         Decimal   @db.Decimal(10, 2)
+  gradeId        String?   @db.Uuid
   classSectionId String?   @db.Uuid
   termStart      DateTime?
   termEnd        DateTime?
   createdAt      DateTime  @default(now())
 
   school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  grade        Grade?        @relation(fields: [gradeId], references: [id])
   classSection ClassSection? @relation(fields: [classSectionId], references: [id])
   feeInvoices  FeeInvoice[]
 
   @@index([schoolId])
+  @@index([gradeId])
 }
 
 model FeeInvoice {
@@ -458,33 +507,41 @@ model FeeInvoice {
 }
 
 model Payment {
-  id                String        @id @default(uuid()) @db.Uuid
-  schoolId          String        @db.Uuid
-  feeInvoiceId      String        @db.Uuid
-  amount            Decimal       @db.Decimal(10, 2)
-  status            PaymentStatus @default(PENDING)
-  razorpayOrderId   String?
-  razorpayPaymentId String?       @unique
-  receiptUrl        String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                 String           @id @default(uuid()) @db.Uuid
+  schoolId           String           @db.Uuid
+  feeInvoiceId       String           @db.Uuid
+  amount             Decimal          @db.Decimal(10, 2)
+  status             PaymentStatus    @default(PENDING)
+  provider           PaymentProvider?
+  externalOrderId    String?
+  externalPaymentId  String?          @unique
+  receiptUrl         String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   school     School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   feeInvoice FeeInvoice @relation(fields: [feeInvoiceId], references: [id])
 
   @@index([schoolId])
+  @@index([externalOrderId])
 }
 
-model SchoolPaymentConfig {
-  id                        String   @id @default(uuid()) @db.Uuid
-  schoolId                  String   @unique @db.Uuid
-  razorpayKeyId             String
-  razorpayKeySecretEncrypted String
-  webhookSecretEncrypted    String?
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+model SchoolPaymentProviderConfig {
+  id                     String          @id @default(uuid()) @db.Uuid
+  schoolId               String          @db.Uuid
+  provider               PaymentProvider
+  isEnabled              Boolean         @default(true)
+  publicKey              String
+  secretEncrypted        String
+  webhookSecretEncrypted String?
+  configJson             Json?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, provider])
+  @@index([schoolId])
 }
 
 model AIServiceKey {

@@ -6,8 +6,15 @@ import {
   confirmDocumentUploadAction,
 } from "@/actions/parent";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FileInput } from "@/components/ui/file-input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface Student {
@@ -16,17 +23,19 @@ interface Student {
 }
 
 export function DocumentUploadForm({ students }: { students: Student[] }) {
+  const [studentId, setStudentId] = useState("");
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!studentId) return;
+
     setLoading(true);
     setError("");
     const fd = new FormData(e.currentTarget);
-    const file = (fd.get("file") as File);
-    const studentId = fd.get("studentId") as string;
+    const file = fd.get("file") as File;
 
     try {
       const { uploadUrl, key } = await getDocumentUploadUrlAction({
@@ -49,6 +58,7 @@ export function DocumentUploadForm({ students }: { students: Student[] }) {
       });
 
       setDone(true);
+      setStudentId("");
       e.currentTarget.reset();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -64,18 +74,25 @@ export function DocumentUploadForm({ students }: { students: Student[] }) {
         <form onSubmit={handleUpload} className="space-y-3">
           <div>
             <Label>Student</Label>
-            <select name="studentId" className="flex h-10 w-full rounded-md border px-3 text-sm" required>
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            <Select value={studentId || undefined} onValueChange={setStudentId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select student" />
+              </SelectTrigger>
+              <SelectContent>
+                {students.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>File</Label>
-            <Input name="file" type="file" required />
+            <FileInput name="file" required />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          {done && <p className="text-sm text-green-600">Document uploaded for review</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {done && <p className="text-sm text-success">Document uploaded for review</p>}
           <Button type="submit" disabled={loading}>
             {loading ? "Uploading..." : "Upload"}
           </Button>
