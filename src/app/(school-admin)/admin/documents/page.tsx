@@ -4,19 +4,8 @@ import { redirect } from "next/navigation";
 import { listPendingDocumentsAction } from "@/actions/parent";
 import { DocumentReviewList } from "./document-review";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const navItems = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/teachers", label: "Teachers" },
-  { href: "/admin/students", label: "Students" },
-  { href: "/admin/classes", label: "Classes" },
-  { href: "/admin/schedule", label: "Schedule" },
-  { href: "/admin/attendance", label: "Attendance" },
-  { href: "/admin/documents", label: "Documents" },
-  { href: "/admin/leave", label: "Leave Requests" },
-  { href: "/admin/fees", label: "Fees" },
-  { href: "/admin/settings", label: "Settings" },
-];
+import { Badge } from "@/components/ui/badge";
+import { schoolAdminNav } from "@/lib/nav-config";
 
 export default async function AdminDocumentsPage() {
   const ctx = await getSessionContext();
@@ -25,9 +14,14 @@ export default async function AdminDocumentsPage() {
   const documents = await listPendingDocumentsAction();
 
   return (
-    <PortalShell title="Document Review" navItems={navItems} userName={ctx.name}>
+    <PortalShell title="Document Review" navItems={schoolAdminNav} userName={ctx.name}>
       <Card>
-        <CardHeader><CardTitle>Pending Documents ({documents.length})</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <CardTitle>Pending Documents</CardTitle>
+            {documents.length > 0 && <Badge variant="warning">{documents.length}</Badge>}
+          </div>
+        </CardHeader>
         <CardContent>
           <DocumentReviewList documents={documents} />
         </CardContent>

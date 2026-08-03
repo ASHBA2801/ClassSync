@@ -1,26 +1,440 @@
 @import "tailwindcss";
 
+/* ── Glassmorphism design tokens ─────────────────────────────────────── */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: transparent;
+  --surface: rgba(12, 14, 28, 0.72);
+  --surface-hover: rgba(255, 255, 255, 0.1);
+  --surface-raised: rgba(16, 18, 36, 0.82);
+  --surface-solid: rgba(10, 12, 24, 0.94);
+  --surface-nested: rgba(0, 0, 0, 0.32);
+  --surface-input: rgba(0, 0, 0, 0.45);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --text-1: #f8fafc;
+  --text-2: rgba(255, 255, 255, 0.72);
+  --text-3: rgba(255, 255, 255, 0.48);
+  --primary: #34d399;
+  --primary-hover: #6ee7b7;
+  --primary-fg: #042f2e;
+  --accent: #60a5fa;
+  --accent-hover: #93c5fd;
+  --success: #6ee7b7;
+  --success-light: rgba(16, 185, 129, 0.22);
+  --success-border: rgba(52, 211, 153, 0.35);
+  --warning: #fcd34d;
+  --warning-light: rgba(251, 191, 36, 0.18);
+  --warning-border: rgba(251, 191, 36, 0.35);
+  --danger: #fca5a5;
+  --danger-light: rgba(239, 68, 68, 0.18);
+  --danger-border: rgba(248, 113, 113, 0.35);
+  --info: #93c5fd;
+  --info-light: rgba(96, 165, 250, 0.18);
+  --info-border: rgba(96, 165, 250, 0.35);
+
+  --glass-blur: 24px;
+  --glass-blur-sm: 18px;
+  --glass-blur-lg: 32px;
+
+  --shadow-card:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --shadow-glow: 0 0 24px rgba(52, 211, 153, 0.12);
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --gradient-primary: linear-gradient(135deg, #10b981 0%, #059669 40%, #2563eb 100%);
+  --gradient-primary-hover: linear-gradient(135deg, #34d399 0%, #10b981 40%, #3b82f6 100%);
+  --gradient-surface: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.11) 0%,
+    rgba(255, 255, 255, 0.04) 45%,
+    rgba(255, 255, 255, 0.07) 100%
+  );
+  --gradient-sidebar: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
 }
+
+/* ── Tailwind v4 theme registration ────────────────────────────────── */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-solid: var(--surface-solid);
+  --color-surface-nested: var(--surface-nested);
+  --color-surface-input: var(--surface-input);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-subtle: var(--border-subtle);
+  --color-text-1: var(--text-1);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-danger: var(--danger);
+  --color-danger-light: var(--danger-light);
+  --color-info: var(--info);
+  --color-info-light: var(--info-light);
+
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-modal: var(--shadow-modal);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── App background ────────────────────────────────────────────────── */
+
+.app-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
+
+.app-background__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(22px) saturate(1.05) brightness(0.52);
+  transform: scale(1.1);
+}
+
+.app-background__overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(88, 28, 135, 0.28) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 50% at 100% 100%, rgba(30, 58, 138, 0.22) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(6, 4, 16, 0.62) 0%, rgba(10, 8, 22, 0.78) 100%);
+}
+
+.app-background__vignette {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Glass utilities ───────────────────────────────────────────────── */
+
+.glass {
+  background: var(--gradient-surface);
+  background-color: var(--surface);
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.glass-sidebar {
+  background: var(--gradient-sidebar);
+  background-color: rgba(8, 10, 22, 0.82);
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
+  border-right: 1px solid var(--border);
+  box-shadow: 4px 0 32px rgba(0, 0, 0, 0.25);
+}
+
+.glass-header {
+  background-color: rgba(8, 10, 22, 0.62);
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+  border-bottom: 1px solid var(--border);
+}
+
+.glass-panel {
+  background: var(--gradient-surface);
+  background-color: var(--surface);
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+  border: 1px solid var(--border);
+}
+
+.glass-card {
+  background: var(--gradient-surface);
+  background-color: var(--surface-raised);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.glass-nested {
+  background: var(--surface-nested);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.glass-nested:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border);
+}
+
+.glass-input {
+  background: var(--surface-input);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.glass-input::placeholder {
+  color: var(--text-3);
+}
+
+.glass-input:focus {
+  border-color: rgba(52, 211, 153, 0.4);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.12);
+  outline: none;
+}
+
+.glass-select-content {
+  background: var(--gradient-surface);
+  background-color: var(--surface-solid);
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
+  border: 1px solid var(--border-strong);
+  box-shadow:
+    var(--shadow-modal),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+/* Custom date picker calendar (react-day-picker) */
+.glass-calendar.rdp-root {
+  --rdp-accent-color: var(--primary);
+  --rdp-accent-background-color: rgba(52, 211, 153, 0.15);
+  --rdp-today-color: var(--accent);
+  --rdp-day-height: 36px;
+  --rdp-day-width: 36px;
+  --rdp-day_button-height: 36px;
+  --rdp-day_button-width: 36px;
+  --rdp-day_button-border-radius: var(--radius-sm);
+  --rdp-selected-border: none;
+  color: var(--text-1);
+}
+
+.glass-calendar .rdp-day_button {
+  color: var(--text-2);
+}
+
+.glass-calendar .rdp-selected .rdp-day_button {
+  background: rgba(52, 211, 153, 0.2);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.glass-calendar .rdp-today:not(.rdp-selected) .rdp-day_button {
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  color: var(--accent);
+}
+
+.glass-calendar .rdp-outside .rdp-day_button {
+  color: var(--text-3);
+  opacity: 0.5;
+}
+
+.glass-calendar .rdp-disabled .rdp-day_button {
+  opacity: 0.3;
+}
+
+/* Native selects/inputs fallback — use custom components instead; kept for edge cases */
+select.glass-native {
+  appearance: none;
+  color-scheme: dark;
+  background-color: var(--surface-input);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.45)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem;
+}
+
+/* Hide native number spinners — use typed input only */
+.glass-number-input::-webkit-inner-spin-button,
+.glass-number-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.glass-number-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Dark autofill for glass inputs */
+.glass-input:-webkit-autofill,
+.glass-input:-webkit-autofill:hover,
+.glass-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.55) inset;
+  -webkit-text-fill-color: var(--text-1);
+  caret-color: var(--text-1);
+  transition: background-color 9999s ease-out;
+}
+
+/* Text selection */
+::selection {
+  background: rgba(52, 211, 153, 0.35);
+  color: var(--text-1);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.btn-gradient {
+  background: var(--gradient-primary);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.btn-gradient:hover:not(:disabled) {
+  background: var(--gradient-primary-hover);
+  box-shadow: 0 6px 28px rgba(16, 185, 129, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-gradient:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.nav-active {
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.22) 0%, rgba(52, 211, 153, 0.06) 100%);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  color: var(--primary);
+  box-shadow: var(--shadow-glow);
+}
+
+.text-shadow-sm {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1.5rem;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px dashed var(--border);
+}
+
+.icon-ring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.25) 0%, rgba(37, 99, 235, 0.2) 100%);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  box-shadow: 0 0 20px rgba(52, 211, 153, 0.15);
+}
+
+.divider-subtle {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+/* ── Base styles ───────────────────────────────────────────────────── */
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #06040f;
+  color: var(--text-1);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Typography scale utilities ───────────────────────────────────── */
+
+.text-xs-erp   { font-size: 12px; line-height: 1.5; }
+.text-sm-erp   { font-size: 14px; line-height: 1.5; }
+.text-base-erp { font-size: 16px; line-height: 1.5; }
+.text-lg-erp   { font-size: 20px; line-height: 1.25; letter-spacing: -0.01em; }
+.text-xl-erp   { font-size: 24px; line-height: 1.2; letter-spacing: -0.02em; }
+.text-2xl-erp  { font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; }
+
+/* ── Focus ring ───────────────────────────────────────────────────── */
+
+*:focus-visible {
+  outline: 2px solid rgba(52, 211, 153, 0.6);
+  outline-offset: 2px;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+/* Google Maps Place Autocomplete */
+gmp-place-autocomplete {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-input);
+  color-scheme: dark;
 }

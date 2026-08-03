@@ -4,18 +4,8 @@ import { redirect } from "next/navigation";
 import { listSchoolUsersAction } from "@/actions/school-admin";
 import { CreateUserForm } from "@/components/create-user-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const navItems = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/teachers", label: "Teachers" },
-  { href: "/admin/students", label: "Students" },
-  { href: "/admin/classes", label: "Classes" },
-  { href: "/admin/schedule", label: "Schedule" },
-  { href: "/admin/attendance", label: "Attendance" },
-  { href: "/admin/leave", label: "Leave Requests" },
-  { href: "/admin/fees", label: "Fees" },
-  { href: "/admin/settings", label: "Settings" },
-];
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { schoolAdminNav } from "@/lib/nav-config";
 
 export default async function TeachersPage() {
   const ctx = await getSessionContext();
@@ -24,21 +14,31 @@ export default async function TeachersPage() {
   const teachers = await listSchoolUsersAction("TEACHER");
 
   return (
-    <PortalShell title="Teachers" navItems={navItems} userName={ctx.name}>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+    <PortalShell title="Teachers" navItems={schoolAdminNav} userName={ctx.name}>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
           <CardHeader><CardTitle>Add Teacher</CardTitle></CardHeader>
           <CardContent><CreateUserForm role="TEACHER" /></CardContent>
         </Card>
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Teachers ({teachers.length})</CardTitle></CardHeader>
           <CardContent>
-            {teachers.map((t) => (
-              <div key={t.id} className="border-b py-2 text-sm">
-                <p className="font-medium">{t.user.name}</p>
-                <p className="text-zinc-500">{t.user.email}</p>
-              </div>
-            ))}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {teachers.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium">{t.user.name}</TableCell>
+                    <TableCell className="text-text-2">{t.user.email}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>

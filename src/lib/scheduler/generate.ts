@@ -11,8 +11,19 @@ export async function enqueueScheduleGeneration(schoolId: string) {
 export async function generateScheduleForSchool(schoolId: string) {
   const assignments = await prisma.teacherAssignment.findMany({
     where: { schoolId },
-    include: { subject: true },
+    include: {
+      subject: true,
+      classSection: { include: { gradeRef: true } },
+    },
   });
+
+  const gradeIds = [...new Set(assignments.map((a) => a.classSection.gradeId))];
+  const gradeSubjects = await prisma.gradeSubject.findMany({
+    where: { schoolId, gradeId: { in: gradeIds } },
+  });
+  const gradeSubjectMap = new Map(
+    gradeSubjects.map((gs) => [`${gs.gradeId}:${gs.subjectId}`, gs.periodsPerWeek]),
+  );
 
   const constraints = await prisma.scheduleConstraint.findMany({ where: { schoolId } });
   const periodTimings = await prisma.periodTiming.findMany({
@@ -30,7 +41,10 @@ export async function generateScheduleForSchool(schoolId: string) {
       teacherId: a.teacherId,
       classSectionId: a.classSectionId,
       subjectId: a.subjectId,
-      periodsPerWeek: a.subject.periodsPerWeek,
+      periodsPerWeek:
+        a.periodsPerWeek ??
+        gradeSubjectMap.get(`${a.classSection.gradeId}:${a.subjectId}`) ??
+        a.subject.periodsPerWeek,
     })),
     constraints: constraints.map((c) => ({
       teacherId: c.teacherId ?? undefined,

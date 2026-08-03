@@ -1,45 +1,54 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { prisma } from "@/lib/db/prisma";
-import { decrypt } from "@/lib/encryption";
+import type { DecryptedProviderConfig, PaymentAdapter } from "./types";
 
-export async function getRazorpayClientForSchool(schoolId: string): Promise<Razorpay> {
-  const config = await prisma.schoolPaymentConfig.findUnique({ where: { schoolId } });
-  if (!config) {
-    throw new Error("Payment not configured for this school");
-  }
-
-  const keySecret = decrypt(config.razorpayKeySecretEncrypted);
+export function createRazorpayClient(config: DecryptedProviderConfig): Razorpay {
   return new Razorpay({
-    key_id: config.razorpayKeyId,
-    key_secret: keySecret,
+    key_id: config.publicKey,
+    key_secret: config.secret,
   });
 }
 
-export async function verifyWebhookSignature(
-  schoolId: string,
+export function verifyRazorpayWebhook(
+  config: DecryptedProviderConfig,
   body: string,
   signature: string,
-): Promise<boolean> {
-  const config = await prisma.schoolPaymentConfig.findUnique({ where: { schoolId } });
-  if (!config?.webhookSecretEncrypted) return false;
-
-  const secret = decrypt(config.webhookSecretEncrypted);
-  const expected = crypto.createHmac("sha256", secret).update(body).digest("hex");
+): boolean {
+  if (!config.webhookSecret) return false;
+  const expected = crypto.createHmac("sha256", config.webhookSecret).update(body).digest("hex");
   return expected === signature;
 }
 
-export async function createPaymentOrder(
-  schoolId: string,
-  amount: number,
-  invoiceId: string,
-  receipt: string,
-) {
-  const razorpay = await getRazorpayClientForSchool(schoolId);
-  return razorpay.orders.create({
-    amount: Math.round(amount * 100),
-    currency: "INR",
-    receipt,
-    notes: { invoiceId, schoolId },
-  });
+export function verifyRazorpayPaymentSignature(
+  config: DecryptedProviderConfig,
+  orderId: string,
+  paymentId: string,
+  signature: string,
+): boolean {
+  const expected = crypto
+    .createHmac("sha256", config.secret)
+    .update(`${orderId}|${paymentId}`)
+    .digest("hex");
+  return expected === signature;
 }
+
+export const razorpayAdapter: PaymentAdapter = {
+  provider: "RAZORPAY",
+  async createOrder(config, amount, invoiceId, receipt) {
+    const razorpay = createRazorpayClient(config);
+    const order = await razorpay.orders.create({
+      amount: Math.round(amount * 100),
+      currency: "INR",
+      receipt,
+      notes: { invoiceId },
+    });
+
+    return {
+      provider: "RAZORPAY",
+      orderId: order.id,
+      amount: Number(order.amount),
+      currency: order.currency,
+      publicKey: config.publicKey,
+    };
+  },
+};

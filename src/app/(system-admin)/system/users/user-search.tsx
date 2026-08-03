@@ -5,6 +5,8 @@ import { searchGlobalUsersAction } from "@/actions/monitoring";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type UserResult = Awaited<ReturnType<typeof searchGlobalUsersAction>>[number];
 
@@ -27,25 +29,46 @@ export function GlobalUserSearch() {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by email or name" />
-        <Button type="submit" disabled={loading}>{loading ? "Searching..." : "Search"}</Button>
-      </form>
-      <div className="space-y-2">
-        {results.map((u) => (
-          <Card key={u.id}>
-            <CardContent className="p-4">
-              <p className="font-medium">{u.name}</p>
-              <p className="text-sm text-zinc-500">{u.email}</p>
-              <div className="mt-2 text-xs text-zinc-400">
-                {u.memberships.map((m) => (
-                  <span key={m.id} className="mr-2">{m.role} @ {m.school.name}</span>
+      <Card>
+        <CardContent className="p-4">
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by email or name" />
+            <Button type="submit" disabled={loading}>{loading ? "Searching…" : "Search"}</Button>
+          </form>
+        </CardContent>
+      </Card>
+      {results.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Memberships</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {results.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.name}</TableCell>
+                    <TableCell className="text-text-2">{u.email}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {u.memberships.map((m) => (
+                          <Badge key={m.id} variant="outline" hideIcon>
+                            {m.role} @ {m.school.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

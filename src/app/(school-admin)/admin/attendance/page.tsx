@@ -7,18 +7,9 @@ import {
 } from "@/actions/attendance";
 import { AttendanceReview } from "./attendance-review";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const navItems = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/teachers", label: "Teachers" },
-  { href: "/admin/students", label: "Students" },
-  { href: "/admin/classes", label: "Classes" },
-  { href: "/admin/schedule", label: "Schedule" },
-  { href: "/admin/attendance", label: "Attendance" },
-  { href: "/admin/leave", label: "Leave Requests" },
-  { href: "/admin/fees", label: "Fees" },
-  { href: "/admin/settings", label: "Settings" },
-];
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { schoolAdminNav } from "@/lib/nav-config";
 
 export default async function AttendancePage() {
   const ctx = await getSessionContext();
@@ -30,25 +21,56 @@ export default async function AttendancePage() {
   ]);
 
   return (
-    <PortalShell title="Attendance" navItems={navItems} userName={ctx.name}>
-      <Card>
-        <CardHeader><CardTitle>Escalated Attendance ({escalated.length})</CardTitle></CardHeader>
-        <CardContent>
-          <AttendanceReview records={escalated} />
-        </CardContent>
-      </Card>
-
-      <Card className="mt-6">
-        <CardHeader><CardTitle>All Records</CardTitle></CardHeader>
-        <CardContent>
-          {records.map((r) => (
-            <div key={r.id} className="flex justify-between border-b py-2 text-sm">
-              <span>{r.teacher.name}</span>
-              <span>{r.date.toISOString().slice(0, 10)} · {r.status}</span>
+    <PortalShell title="Attendance" navItems={schoolAdminNav} userName={ctx.name}>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle>Escalated Attendance</CardTitle>
+              {escalated.length > 0 && (
+                <Badge variant="danger">{escalated.length}</Badge>
+              )}
             </div>
-          ))}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <AttendanceReview records={escalated} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>All Records</CardTitle></CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Teacher</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {records.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-medium">{r.teacher.name}</TableCell>
+                    <TableCell className="text-text-2">{r.date.toISOString().slice(0, 10)}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          r.status === "PRESENT" ? "success" :
+                          r.status === "ESCALATED" ? "danger" :
+                          "warning"
+                        }
+                      >
+                        {r.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
     </PortalShell>
   );
 }

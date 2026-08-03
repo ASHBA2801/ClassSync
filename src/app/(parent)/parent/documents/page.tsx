@@ -3,13 +3,7 @@ import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import { getLinkedStudentsAction } from "@/actions/parent";
 import { DocumentUploadForm } from "./document-upload";
-
-const navItems = [
-  { href: "/parent", label: "Dashboard" },
-  { href: "/parent/documents", label: "Documents" },
-  { href: "/parent/leave", label: "Leave Requests" },
-  { href: "/parent/fees", label: "Fees & Payments" },
-];
+import { parentNav } from "@/lib/nav-config";
 
 export default async function DocumentsPage() {
   const ctx = await getSessionContext();
@@ -18,7 +12,7 @@ export default async function DocumentsPage() {
   const students = await getLinkedStudentsAction();
 
   return (
-    <PortalShell title="Documents" navItems={navItems} userName={ctx.name}>
+    <PortalShell title="Documents" navItems={parentNav} userName={ctx.name}>
       <DocumentUploadForm students={students.map((s) => ({ id: s.id, name: s.name }))} />
     </PortalShell>
   );

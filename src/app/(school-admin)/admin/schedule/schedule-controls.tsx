@@ -36,7 +36,7 @@ export function ScheduleControls({ periods }: { periods: Period[] }) {
           <Button onClick={handleGenerate} disabled={loading}>
             {loading ? "Queuing..." : "Generate Timetable"}
           </Button>
-          {queued && <p className="mt-2 text-sm text-green-600">Generation queued</p>}
+          {queued && <p className="mt-2 text-sm text-success">Generation queued</p>}
         </CardContent>
       </Card>
 
@@ -81,7 +81,7 @@ export function ScheduleControls({ periods }: { periods: Period[] }) {
             <div><Label>Max Free Periods</Label><Input name="maxFreePeriods" type="number" defaultValue={3} /></div>
             <Button type="submit" size="sm">Save Constraints</Button>
           </form>
-          <p className="mt-2 text-xs text-zinc-500">{periods.length} periods configured</p>
+          <p className="mt-2 text-xs text-text-2">{periods.length} periods configured</p>
         </CardContent>
       </Card>
     </div>

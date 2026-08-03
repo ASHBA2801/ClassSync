@@ -15,7 +15,7 @@ async function main() {
       name: "System Admin",
       passwordHash,
     },
-    update: {},
+    update: { passwordHash },
   });
 
   const school = await prisma.school.upsert({
@@ -39,7 +39,7 @@ async function main() {
       name: "School Admin",
       passwordHash: await hash("school123", 12),
     },
-    update: {},
+    update: { passwordHash: await hash("school123", 12) },
   });
 
   const teacher = await prisma.user.upsert({
@@ -49,7 +49,7 @@ async function main() {
       name: "Demo Teacher",
       passwordHash: await hash("teacher123", 12),
     },
-    update: {},
+    update: { passwordHash: await hash("teacher123", 12) },
   });
 
   const parent = await prisma.user.upsert({
@@ -59,7 +59,7 @@ async function main() {
       name: "Demo Parent",
       passwordHash: await hash("parent123", 12),
     },
-    update: {},
+    update: { passwordHash: await hash("parent123", 12) },
   });
 
   await prisma.userSchoolMembership.upsert({
@@ -86,15 +86,38 @@ async function main() {
     update: {},
   });
 
+  const grade = await prisma.grade.upsert({
+    where: { schoolId_name: { schoolId: school.id, name: "Grade 10" } },
+    create: { schoolId: school.id, name: "Grade 10", sortOrder: 10 },
+    update: {},
+  });
+
   const classSection = await prisma.classSection.upsert({
-    where: { schoolId_grade_section: { schoolId: school.id, grade: "10", section: "A" } },
-    create: { schoolId: school.id, name: "Grade 10-A", grade: "10", section: "A" },
+    where: { schoolId_gradeId_section: { schoolId: school.id, gradeId: grade.id, section: "A" } },
+    create: {
+      schoolId: school.id,
+      gradeId: grade.id,
+      name: "Grade 10 - A",
+      grade: "10",
+      section: "A",
+    },
     update: {},
   });
 
   const subject = await prisma.subject.upsert({
     where: { schoolId_name: { schoolId: school.id, name: "Mathematics" } },
     create: { schoolId: school.id, name: "Mathematics", code: "MATH", periodsPerWeek: 5 },
+    update: {},
+  });
+
+  await prisma.gradeSubject.upsert({
+    where: { gradeId_subjectId: { gradeId: grade.id, subjectId: subject.id } },
+    create: {
+      schoolId: school.id,
+      gradeId: grade.id,
+      subjectId: subject.id,
+      periodsPerWeek: 5,
+    },
     update: {},
   });
 
@@ -146,20 +169,14 @@ async function main() {
     });
   }
 
-  await prisma.scheduleConstraint.upsert({
-    where: { schoolId_teacherId: { schoolId: school.id, teacherId: null as unknown as string } },
-    create: { schoolId: school.id, minFreePeriods: 1, maxFreePeriods: 3 },
-    update: {},
-  }).catch(async () => {
-    const existing = await prisma.scheduleConstraint.findFirst({
-      where: { schoolId: school.id, teacherId: null },
-    });
-    if (!existing) {
-      await prisma.scheduleConstraint.create({
-        data: { schoolId: school.id, minFreePeriods: 1, maxFreePeriods: 3 },
-      });
-    }
+  const existingConstraint = await prisma.scheduleConstraint.findFirst({
+    where: { schoolId: school.id, teacherId: null },
   });
+  if (!existingConstraint) {
+    await prisma.scheduleConstraint.create({
+      data: { schoolId: school.id, minFreePeriods: 1, maxFreePeriods: 3 },
+    });
+  }
 
   console.log("Seed complete!");
   console.log("System Admin: admin@classsync.app / admin123");

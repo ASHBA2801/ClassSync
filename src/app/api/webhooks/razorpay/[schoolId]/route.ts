@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
-import { verifyWebhookSignature } from "@/lib/payments/razorpay";
 import { acquireIdempotencyKey } from "@/lib/rate-limit";
+import { completePayment } from "@/lib/payments/complete-payment";
+import { getProviderConfig } from "@/lib/payments/registry";
+import { verifyRazorpayWebhook } from "@/lib/payments/razorpay";
 
 export async function POST(
   req: NextRequest,
@@ -11,8 +12,8 @@ export async function POST(
   const body = await req.text();
   const signature = req.headers.get("x-razorpay-signature") ?? "";
 
-  const valid = await verifyWebhookSignature(schoolId, body, signature);
-  if (!valid) {
+  const config = await getProviderConfig(schoolId, "RAZORPAY");
+  if (!config || !verifyRazorpayWebhook(config, body, signature)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
@@ -29,40 +30,18 @@ export async function POST(
       return NextResponse.json({ received: true });
     }
 
-    const idempotencyOk = await acquireIdempotencyKey(
-      `razorpay:${paymentEntity.id}`,
-    );
+    const idempotencyOk = await acquireIdempotencyKey(`razorpay:${paymentEntity.id}`);
     if (!idempotencyOk) {
       return NextResponse.json({ received: true, duplicate: true });
     }
 
-    const payment = await prisma.payment.findFirst({
-      where: { razorpayOrderId: paymentEntity.order_id, schoolId },
-      include: { feeInvoice: true },
+    await completePayment({
+      schoolId,
+      externalOrderId: paymentEntity.order_id,
+      externalPaymentId: paymentEntity.id,
+      paidAmount: paymentEntity.amount / 100,
+      provider: "RAZORPAY",
     });
-
-    if (payment) {
-      const paidAmount = paymentEntity.amount / 100;
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: "SUCCESS",
-          razorpayPaymentId: paymentEntity.id,
-        },
-      });
-
-      const invoice = payment.feeInvoice;
-      const newPaid = Number(invoice.paidAmount) + paidAmount;
-      const total = Number(invoice.amount);
-
-      await prisma.feeInvoice.update({
-        where: { id: invoice.id },
-        data: {
-          paidAmount: newPaid,
-          status: newPaid >= total ? "PAID" : "PARTIALLY_PAID",
-        },
-      });
-    }
   }
 
   return NextResponse.json({ received: true });
