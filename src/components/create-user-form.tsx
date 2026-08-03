@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createSchoolUserAction } from "@/actions/school-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export function CreateUserForm({ role }: { role: "TEACHER" | "PARENT" | "SCHOOL_ADMIN" }) {
@@ -37,10 +38,10 @@ export function CreateUserForm({ role }: { role: "TEACHER" | "PARENT" | "SCHOOL_
     <form onSubmit={handleSubmit} className="space-y-3">
       <div><Label>Name</Label><Input name="name" required /></div>
       <div><Label>Email</Label><Input name="email" type="email" required /></div>
-      <div><Label>Password</Label><Input name="password" type="password" required minLength={8} /></div>
+      <div><Label>Password</Label><PasswordInput name="password" required minLength={8} /></div>
       <div><Label>Phone</Label><Input name="phone" /></div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {done && <p className="text-sm text-green-600">User created</p>}
+      {done && <p className="text-sm text-success">User created</p>}
       <Button type="submit" disabled={loading}>Create {role.toLowerCase().replace("_", " ")}</Button>
     </form>
   );

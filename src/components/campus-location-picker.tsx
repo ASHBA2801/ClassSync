@@ -15,7 +15,6 @@ import {
   useMapsLibrary,
   type MapMouseEvent as VisMapMouseEvent,
 } from "@vis.gl/react-google-maps";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const FALLBACK_CENTER = { lat: 12.9716, lng: 77.5946 };
@@ -24,6 +23,11 @@ interface CampusLocationPickerProps {
   defaultLat?: number | null;
   defaultLng?: number | null;
   onLocationChange?: (lat: number, lng: number) => void;
+}
+
+function readLatLng(location: google.maps.LatLng | null | undefined): { lat: number; lng: number } | null {
+  if (!location) return null;
+  return { lat: location.lat(), lng: location.lng() };
 }
 
 function MapPanHandler({ position }: { position: google.maps.LatLngLiteral | null }) {
@@ -40,9 +44,9 @@ function MapPanHandler({ position }: { position: google.maps.LatLngLiteral | nul
 function PlaceSearch({
   onPlaceSelect,
 }: {
-  onPlaceSelect: (place: google.maps.places.PlaceResult) => void;
+  onPlaceSelect: (lat: number, lng: number) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const places = useMapsLibrary("places");
   const onPlaceSelectRef = useRef(onPlaceSelect);
 
@@ -51,22 +55,40 @@ function PlaceSearch({
   }, [onPlaceSelect]);
 
   useEffect(() => {
-    if (!places || !inputRef.current) return;
+    if (!places || !containerRef.current) return;
 
-    const autocomplete = new places.Autocomplete(inputRef.current, {
-      fields: ["geometry", "name", "formatted_address"],
+    const PlaceAutocompleteElement = places.PlaceAutocompleteElement;
+    if (!PlaceAutocompleteElement) return;
+
+    const autocomplete = new PlaceAutocompleteElement({
+      placeholder: "Search campus address...",
     });
 
-    const listener = autocomplete.addListener("place_changed", () => {
-      onPlaceSelectRef.current(autocomplete.getPlace());
-    });
+    autocomplete.style.width = "100%";
+    autocomplete.style.border = "1px solid var(--border)";
+    autocomplete.style.borderRadius = "var(--radius-sm)";
+    autocomplete.style.backgroundColor = "var(--surface)";
+
+    const handleSelect = async (event: Event) => {
+      const selectEvent = event as google.maps.places.PlacePredictionSelectEvent;
+      const place = selectEvent.placePrediction.toPlace();
+      await place.fetchFields({ fields: ["location"] });
+
+      const coords = readLatLng(place.location);
+      if (!coords) return;
+      onPlaceSelectRef.current(coords.lat, coords.lng);
+    };
+
+    autocomplete.addEventListener("gmp-select", handleSelect);
+    containerRef.current.replaceChildren(autocomplete);
 
     return () => {
-      google.maps.event.removeListener(listener);
+      autocomplete.removeEventListener("gmp-select", handleSelect);
+      containerRef.current?.replaceChildren();
     };
   }, [places]);
 
-  return <Input ref={inputRef} placeholder="Search campus address..." type="text" autoComplete="off" />;
+  return <div ref={containerRef} className="w-full" />;
 }
 
 function CampusLocationPickerInner({
@@ -111,10 +133,8 @@ function CampusLocationPickerInner({
   }, [hasDefaults, geoUnavailable]);
 
   const handlePlaceSelect = useCallback(
-    (place: google.maps.places.PlaceResult) => {
-      const loc = place.geometry?.location;
-      if (!loc) return;
-      updatePosition(loc.lat(), loc.lng());
+    (lat: number, lng: number) => {
+      updatePosition(lat, lng);
     },
     [updatePosition],
   );
@@ -143,9 +163,9 @@ function CampusLocationPickerInner({
       <Label>Campus Location</Label>
       <PlaceSearch onPlaceSelect={handlePlaceSelect} />
 
-      <div className="relative h-[300px] w-full overflow-hidden rounded-md border border-zinc-200">
+      <div className="relative h-[300px] w-full overflow-hidden rounded-[var(--radius-md)] border border-border">
         {loading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 text-sm text-zinc-600">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/80 text-sm text-text-2">
             Detecting location...
           </div>
         )}
@@ -168,12 +188,12 @@ function CampusLocationPickerInner({
       </div>
 
       {position ? (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-text-2">
           Selected: {position.lat.toFixed(6)}, {position.lng.toFixed(6)} — used for attendance
           geofencing via device GPS
         </p>
       ) : (
-        <p className="text-xs text-zinc-500">Select a location on the map or search for an address.</p>
+        <p className="text-xs text-text-2">Select a location on the map or search for an address.</p>
       )}
 
       <input type="hidden" name="campusLat" value={position?.lat ?? ""} />

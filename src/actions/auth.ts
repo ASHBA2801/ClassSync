@@ -1,36 +1,24 @@
 "use server";
 
-import { signIn } from "@/lib/auth";
 import { AuthError } from "next-auth";
-import { getRoleDashboardPath } from "@/lib/rbac/guard";
-import type { Role } from "@prisma/client";
+import { signIn } from "@/lib/auth";
 
-export async function loginAction(formData: FormData) {
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const schoolId = formData.get("schoolId") as string | undefined;
-
+export async function credentialsSignInAction(input: {
+  email: string;
+  password: string;
+  schoolId?: string;
+}) {
   try {
-    const result = await signIn("credentials", {
-      email,
-      password,
-      schoolId: schoolId || undefined,
-      redirect: false,
+    await signIn("credentials", {
+      email: input.email,
+      password: input.password,
+      schoolId: input.schoolId,
+      redirectTo: "/",
     });
-
-    if (result?.error) {
-      return { error: "Invalid credentials" };
-    }
-
-    return { success: true };
   } catch (error) {
     if (error instanceof AuthError) {
-      return { error: "Authentication failed" };
+      return { error: "Invalid email or password." };
     }
     throw error;
   }
-}
-
-export function getDashboardPathForRole(role: Role) {
-  return getRoleDashboardPath(role);
 }

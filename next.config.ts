@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  redirects: async () => [
+    {
+      source: "/parent/fees/payment-success",
+      destination: "/parent/fees",
+      permanent: false,
+    },
+  ],
   headers: async () => [
     {
       source: "/sw.js",

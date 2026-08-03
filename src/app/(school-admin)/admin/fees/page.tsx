@@ -2,43 +2,58 @@ import { PortalShell } from "@/components/portal-shell";
 import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import { listFeeStructuresAction, listSchoolPaymentsAction } from "@/actions/payments";
+import { listGradesAction } from "@/actions/school-admin";
 import { FeeManagement } from "./fee-management";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const navItems = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/teachers", label: "Teachers" },
-  { href: "/admin/students", label: "Students" },
-  { href: "/admin/classes", label: "Classes" },
-  { href: "/admin/schedule", label: "Schedule" },
-  { href: "/admin/attendance", label: "Attendance" },
-  { href: "/admin/leave", label: "Leave Requests" },
-  { href: "/admin/fees", label: "Fees" },
-  { href: "/admin/settings", label: "Settings" },
-];
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { schoolAdminNav } from "@/lib/nav-config";
 
 export default async function FeesPage() {
   const ctx = await getSessionContext();
   if (!ctx || ctx.role !== "SCHOOL_ADMIN") redirect("/login");
 
-  const [structures, payments] = await Promise.all([
+  const [structures, payments, grades] = await Promise.all([
     listFeeStructuresAction(),
     listSchoolPaymentsAction(),
+    listGradesAction(),
   ]);
 
   return (
-    <PortalShell title="Fee Management" navItems={navItems} userName={ctx.name}>
-      <FeeManagement structures={structures} />
+    <PortalShell title="Fee Management" navItems={schoolAdminNav} userName={ctx.name}>
+      <FeeManagement structures={structures} grades={grades} />
 
       <Card className="mt-6">
         <CardHeader><CardTitle>Recent Payments</CardTitle></CardHeader>
         <CardContent>
-          {payments.map((p) => (
-            <div key={p.id} className="flex justify-between border-b py-2 text-sm">
-              <span>{p.feeInvoice.student.name}</span>
-              <span>₹{p.amount.toString()} · {p.status}</span>
-            </div>
-          ))}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Student</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {payments.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium">{p.feeInvoice.student.name}</TableCell>
+                  <TableCell>₹{p.amount.toString()}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        p.status === "SUCCESS" ? "success" :
+                        p.status === "FAILED" ? "danger" :
+                        "warning"
+                      }
+                    >
+                      {p.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </PortalShell>

@@ -4,18 +4,9 @@ import { redirect } from "next/navigation";
 import { listStudentsAction, listClassSectionsAction } from "@/actions/school-admin";
 import { CreateStudentForm } from "./create-student-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const navItems = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/teachers", label: "Teachers" },
-  { href: "/admin/students", label: "Students" },
-  { href: "/admin/classes", label: "Classes" },
-  { href: "/admin/schedule", label: "Schedule" },
-  { href: "/admin/attendance", label: "Attendance" },
-  { href: "/admin/leave", label: "Leave Requests" },
-  { href: "/admin/fees", label: "Fees" },
-  { href: "/admin/settings", label: "Settings" },
-];
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { schoolAdminNav } from "@/lib/nav-config";
 
 export default async function StudentsPage() {
   const ctx = await getSessionContext();
@@ -27,22 +18,39 @@ export default async function StudentsPage() {
   ]);
 
   return (
-    <PortalShell title="Students" navItems={navItems} userName={ctx.name}>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+    <PortalShell title="Students" navItems={schoolAdminNav} userName={ctx.name}>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
           <CardHeader><CardTitle>Add Student</CardTitle></CardHeader>
           <CardContent><CreateStudentForm classes={classes} /></CardContent>
         </Card>
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Students ({students.length})</CardTitle></CardHeader>
           <CardContent>
-            {students.map((s) => (
-              <div key={s.id} className="border-b py-2 text-sm">
-                <p className="font-medium">{s.name}</p>
-                <p className="text-zinc-500">{s.classSection?.name ?? "Unassigned"} · {s.admissionNo}</p>
-                <p className="text-zinc-400">{s.guardianRelationships.length} guardian(s)</p>
-              </div>
-            ))}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Class</TableHead>
+                  <TableHead>Admission #</TableHead>
+                  <TableHead>Guardians</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {students.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell>
+                      <Badge variant={s.classSection ? "default" : "outline"}>
+                        {s.classSection?.name ?? "Unassigned"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-text-2 font-mono text-xs">{s.admissionNo}</TableCell>
+                    <TableCell className="text-text-2">{s.guardianRelationships.length}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>

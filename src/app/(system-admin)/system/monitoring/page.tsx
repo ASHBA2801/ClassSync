@@ -3,14 +3,10 @@ import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import { getPlatformMonitoringAction, listAuditLogsAction } from "@/actions/monitoring";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const navItems = [
-  { href: "/system", label: "Dashboard" },
-  { href: "/system/schools", label: "Schools" },
-  { href: "/system/users", label: "Global Users" },
-  { href: "/system/ai-keys", label: "AI Keys" },
-  { href: "/system/monitoring", label: "Monitoring" },
-];
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { systemAdminNav } from "@/lib/nav-config";
+import { AlertTriangle, Bell, CreditCard } from "lucide-react";
 
 export default async function MonitoringPage() {
   const ctx = await getSessionContext();
@@ -22,35 +18,104 @@ export default async function MonitoringPage() {
   ]);
 
   return (
-    <PortalShell title="Platform Monitoring" navItems={navItems} userName={ctx.name}>
+    <PortalShell title="Platform Monitoring" navItems={systemAdminNav} userName={ctx.name}>
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card><CardHeader><CardTitle className="text-base">Failed Notifications</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold">{monitoring.failedNotifications}</p></CardContent></Card>
-          <Card><CardHeader><CardTitle className="text-base">Escalated Attendance</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold">{monitoring.escalatedAttendance}</p></CardContent></Card>
-          <Card><CardHeader><CardTitle className="text-base">Failed Payments</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold">{monitoring.failedPayments}</p></CardContent></Card>
+        {/* Metric cards */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-text-2">Failed Notifications</p>
+                  <p className="text-2xl font-semibold text-text-1 mt-1">{monitoring.failedNotifications}</p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-warning-light">
+                  <Bell className="h-5 w-5 text-warning" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-text-2">Escalated Attendance</p>
+                  <p className="text-2xl font-semibold text-text-1 mt-1">{monitoring.escalatedAttendance}</p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-danger-light">
+                  <AlertTriangle className="h-5 w-5 text-danger" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-text-2">Failed Payments</p>
+                  <p className="text-2xl font-semibold text-text-1 mt-1">{monitoring.failedPayments}</p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-danger-light">
+                  <CreditCard className="h-5 w-5 text-danger" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
+        {/* Queue Health */}
         <Card>
           <CardHeader><CardTitle>Queue Health</CardTitle></CardHeader>
           <CardContent>
-            {Object.entries(monitoring.queueHealth).map(([name, count]) => (
-              <div key={name} className="flex justify-between border-b py-2 text-sm">
-                <span>{name}</span>
-                <span>{count >= 0 ? count : "unavailable"}</span>
-              </div>
-            ))}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Queue</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.entries(monitoring.queueHealth).map(([name, count]) => (
+                  <TableRow key={name}>
+                    <TableCell className="font-medium">{name}</TableCell>
+                    <TableCell>
+                      {count >= 0 ? (
+                        <Badge variant={count === 0 ? "success" : "warning"}>{count} pending</Badge>
+                      ) : (
+                        <Badge variant="danger">Unavailable</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
 
+        {/* Audit Logs */}
         <Card>
           <CardHeader><CardTitle>Recent Audit Logs</CardTitle></CardHeader>
           <CardContent>
-            {auditLogs.map((log) => (
-              <div key={log.id} className="border-b py-2 text-sm">
-                <p><span className="font-medium">{log.action}</span> by {log.actor.name}</p>
-                <p className="text-zinc-500">{log.createdAt.toISOString()}</p>
-              </div>
-            ))}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Actor</TableHead>
+                  <TableHead>Timestamp</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {auditLogs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell>
+                      <Badge variant="outline" hideIcon>{log.action}</Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{log.actor.name}</TableCell>
+                    <TableCell className="text-text-2 text-xs">{log.createdAt.toISOString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>

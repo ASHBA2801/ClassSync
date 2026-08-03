@@ -5,13 +5,9 @@ import { getLinkedStudentsAction } from "@/actions/parent";
 import { listFeeInvoicesForParentAction } from "@/actions/payments";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const navItems = [
-  { href: "/parent", label: "Dashboard" },
-  { href: "/parent/documents", label: "Documents" },
-  { href: "/parent/leave", label: "Leave Requests" },
-  { href: "/parent/fees", label: "Fees & Payments" },
-];
+import { Badge } from "@/components/ui/badge";
+import { parentNav } from "@/lib/nav-config";
+import { User, CreditCard, CheckCircle2 } from "lucide-react";
 
 export default async function ParentDashboardPage() {
   const ctx = await getSessionContext();
@@ -23,37 +19,79 @@ export default async function ParentDashboardPage() {
   ]);
 
   const pendingInvoices = invoices.filter((i) => i.status !== "PAID");
+  const totalPending = pendingInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
 
   return (
-    <PortalShell title="Parent Portal" navItems={navItems} userName={ctx.name}>
-      <div className="grid gap-4 md:grid-cols-2">
+    <PortalShell title="Parent Portal" navItems={parentNav} userName={ctx.name}>
+      <div className="space-y-6">
         <Card>
-          <CardHeader><CardTitle>My Children</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>My Children</CardTitle>
+          </CardHeader>
           <CardContent>
-            {students.map((s) => (
-              <div key={s.id} className="border-b py-2 text-sm">
-                <p className="font-medium">{s.name}</p>
-                <p className="text-zinc-500">{s.classSection?.name ?? "Unassigned"}</p>
-              </div>
-            ))}
+            <div className="grid gap-3 sm:grid-cols-2">
+              {students.map((s) => (
+                <div key={s.id} className="glass-nested flex items-center gap-3 p-4">
+                  <div className="icon-ring h-10 w-10 shrink-0">
+                    <User className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-text-1 text-shadow-sm">{s.name}</p>
+                    <p className="text-xs text-text-2">{s.classSection?.name ?? "Unassigned"}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader><CardTitle>Pending Fees ({pendingInvoices.length})</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-2.5">
+              <div className="icon-ring h-8 w-8">
+                <CreditCard className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <CardTitle>Pending Fees</CardTitle>
+            </div>
+            {pendingInvoices.length > 0 && (
+              <Badge variant="warning">{pendingInvoices.length} pending</Badge>
+            )}
+          </CardHeader>
           <CardContent>
             {pendingInvoices.length === 0 ? (
-              <p className="text-sm text-zinc-500">No pending invoices</p>
+              <div className="empty-state">
+                <div className="icon-ring h-12 w-12">
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                </div>
+                <Badge variant="success">All fees paid</Badge>
+                <p className="text-sm text-text-2">No outstanding payments at this time.</p>
+              </div>
             ) : (
-              <>
+              <div className="space-y-1">
                 {pendingInvoices.slice(0, 3).map((inv) => (
-                  <div key={inv.id} className="border-b py-2 text-sm">
-                    <p>{inv.student.name}: ₹{inv.amount.toString()}</p>
+                  <div
+                    key={inv.id}
+                    className="glass-nested flex items-center justify-between px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-text-1">{inv.student.name}</p>
+                      <p className="text-xs text-text-2">Invoice</p>
+                    </div>
+                    <p className="text-sm font-semibold text-primary">₹{inv.amount}</p>
                   </div>
                 ))}
-                <Link href="/parent/fees" className="mt-2 inline-block text-sm text-blue-600 hover:underline">
-                  View all invoices
+                {totalPending > 0 && (
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <p className="text-sm font-medium text-text-2">Total pending</p>
+                    <p className="text-base font-bold text-text-1 text-shadow-sm">
+                      ₹{totalPending.toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                <Link href="/parent/fees" className="btn-gradient mt-3 inline-flex w-full items-center justify-center rounded-[var(--radius-md)] px-4 py-2.5 text-sm">
+                  Pay Now
                 </Link>
-              </>
+              </div>
             )}
           </CardContent>
         </Card>

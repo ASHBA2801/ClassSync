@@ -131,7 +131,7 @@ export function AttendanceFlow() {
       <Card>
         <CardHeader><CardTitle>Mark Attendance</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <video ref={videoRef} autoPlay playsInline className="w-full rounded bg-zinc-100" />
+          <video ref={videoRef} autoPlay playsInline className="w-full rounded-[var(--radius-sm)] bg-black/40" />
           <canvas ref={canvasRef} className="hidden" />
 
           {!stream && (
@@ -143,13 +143,13 @@ export function AttendanceFlow() {
           </Button>
 
           {message && (
-            <p className={`text-sm ${status === "PRESENT" ? "text-green-600" : status === "blocked" || status === "error" ? "text-red-600" : "text-zinc-600"}`}>
+            <p className={`text-sm ${status === "PRESENT" ? "text-success" : status === "blocked" || status === "error" ? "text-danger" : "text-text-2"}`}>
               {message}
             </p>
           )}
 
           {attemptNumber > 0 && attemptNumber < 3 && status === "FAILED" && (
-            <p className="text-sm text-amber-600">
+            <p className="text-sm text-warning">
               Retry within 5 minutes (attempt {attemptNumber}/3)
             </p>
           )}

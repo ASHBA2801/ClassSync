@@ -3,15 +3,10 @@ import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import { listSchoolsAction } from "@/actions/system-admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { OnboardSchoolForm } from "./onboard-form";
-
-const navItems = [
-  { href: "/system", label: "Dashboard" },
-  { href: "/system/schools", label: "Schools" },
-  { href: "/system/users", label: "Global Users" },
-  { href: "/system/ai-keys", label: "AI Keys" },
-  { href: "/system/monitoring", label: "Monitoring" },
-];
+import { systemAdminNav } from "@/lib/nav-config";
 
 export default async function SchoolsPage() {
   const ctx = await getSessionContext();
@@ -20,24 +15,44 @@ export default async function SchoolsPage() {
   const schools = await listSchoolsAction();
 
   return (
-    <PortalShell title="School Management" navItems={navItems} userName={ctx.name}>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+    <PortalShell title="School Management" navItems={systemAdminNav} userName={ctx.name}>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
           <CardHeader><CardTitle>Onboard New School</CardTitle></CardHeader>
           <CardContent><OnboardSchoolForm /></CardContent>
         </Card>
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader><CardTitle>All Schools ({schools.length})</CardTitle></CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {schools.map((s) => (
-                <div key={s.id} className="rounded border p-3 text-sm">
-                  <p className="font-medium">{s.name}</p>
-                  <p className="text-zinc-500">ID: {s.id}</p>
-                  <p className="text-zinc-500">{s.status} · {s.planTier} · {s.timezone}</p>
-                </div>
-              ))}
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Timezone</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {schools.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{s.name}</p>
+                        <p className="text-xs text-text-2 font-mono">{s.id.slice(0, 8)}…</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={s.status === "ACTIVE" ? "success" : "outline"}>
+                        {s.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell><Badge variant="outline">{s.planTier}</Badge></TableCell>
+                    <TableCell className="text-text-2">{s.timezone}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>

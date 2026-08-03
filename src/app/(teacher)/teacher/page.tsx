@@ -4,13 +4,9 @@ import { redirect } from "next/navigation";
 import { getTeacherScheduleAction } from "@/actions/attendance";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const navItems = [
-  { href: "/teacher", label: "Dashboard" },
-  { href: "/teacher/schedule", label: "Schedule" },
-  { href: "/teacher/attendance", label: "Mark Attendance" },
-  { href: "/teacher/leave", label: "Leave Requests" },
-];
+import { Badge } from "@/components/ui/badge";
+import { teacherNav } from "@/lib/nav-config";
+import { ClipboardCheck, Calendar, Clock } from "lucide-react";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -24,37 +20,82 @@ export default async function TeacherDashboardPage() {
   const todaySlots = schedule.filter((s) => s.dayOfWeek === adjustedDay);
 
   return (
-    <PortalShell title="Teacher Portal" navItems={navItems} userName={ctx.name}>
-      <div className="grid gap-4 md:grid-cols-2">
+    <PortalShell title="Teacher Portal" navItems={teacherNav} userName={ctx.name}>
+      <div className="space-y-6">
+        {/* Today's Schedule — vertical timeline */}
         <Card>
-          <CardHeader><CardTitle>Today&apos;s Classes</CardTitle></CardHeader>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-text-2" />
+                <CardTitle>Today&apos;s Classes</CardTitle>
+              </div>
+              <Badge variant="outline">{DAYS[adjustedDay]}</Badge>
+            </div>
+          </CardHeader>
           <CardContent>
             {todaySlots.length === 0 ? (
-              <p className="text-sm text-zinc-500">No classes scheduled today.</p>
+              <p className="text-sm text-text-2 py-4 text-center">No classes scheduled today.</p>
             ) : (
-              todaySlots.map((s) => (
-                <div key={s.id} className="border-b py-2 text-sm">
-                  <p className="font-medium">Period {s.periodNo}: {s.subject.name}</p>
-                  <p className="text-zinc-500">{s.classSection.name}</p>
-                </div>
-              ))
+              <div className="space-y-3">
+                {todaySlots.map((s) => (
+                  <div key={s.id} className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-border p-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary/10 text-xs font-semibold text-primary">
+                      P{s.periodNo}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-text-1">{s.subject.name}</p>
+                      <p className="text-xs text-text-2">{s.classSection.name}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>Quick Actions</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <Link href="/teacher/attendance" className="block text-sm text-blue-600 hover:underline">
-              Mark attendance (geo + face)
-            </Link>
-            <Link href="/teacher/schedule" className="block text-sm text-blue-600 hover:underline">
-              View full schedule
-            </Link>
-            <Link href="/teacher/leave" className="block text-sm text-blue-600 hover:underline">
-              Request leave
-            </Link>
-          </CardContent>
-        </Card>
+
+        {/* Quick Actions */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Link href="/teacher/attendance" className="group">
+            <Card className="transition-colors group-hover:border-primary/30">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-primary/10">
+                  <ClipboardCheck className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-1">Mark Attendance</p>
+                  <p className="text-xs text-text-2">Geo + face verification</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/teacher/schedule" className="group">
+            <Card className="transition-colors group-hover:border-primary/30">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-primary/10">
+                  <Calendar className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-1">Full Schedule</p>
+                  <p className="text-xs text-text-2">View weekly timetable</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/teacher/leave" className="group">
+            <Card className="transition-colors group-hover:border-primary/30">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-primary/10">
+                  <Clock className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-1">Request Leave</p>
+                  <p className="text-xs text-text-2">Submit leave application</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
       </div>
     </PortalShell>
   );

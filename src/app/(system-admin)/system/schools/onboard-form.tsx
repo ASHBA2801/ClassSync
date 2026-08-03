@@ -5,6 +5,7 @@ import { onboardSchoolAction } from "@/actions/system-admin";
 import { CampusLocationPicker } from "@/components/campus-location-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export function OnboardSchoolForm() {
@@ -51,11 +52,11 @@ export function OnboardSchoolForm() {
       <div><Label>School Name</Label><Input name="name" required /></div>
       <div><Label>Admin Name</Label><Input name="adminName" required /></div>
       <div><Label>Admin Email</Label><Input name="adminEmail" type="email" required /></div>
-      <div><Label>Admin Password</Label><Input name="adminPassword" type="password" required minLength={8} /></div>
+      <div><Label>Admin Password</Label><PasswordInput name="adminPassword" required minLength={8} /></div>
       <CampusLocationPicker />
       <div><Label>Geofence Radius (m)</Label><Input name="campusRadiusM" type="number" defaultValue={200} /></div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {result && <p className="text-sm text-green-600">School created: {result.schoolId}</p>}
+      {result && <p className="text-sm text-success">School created: {result.schoolId}</p>}
       <Button type="submit" disabled={loading}>{loading ? "Creating..." : "Onboard School"}</Button>
     </form>
   );
