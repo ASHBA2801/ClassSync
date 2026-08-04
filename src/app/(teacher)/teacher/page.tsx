@@ -1,7 +1,7 @@
 import { PortalShell } from "@/components/portal-shell";
 import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
-import { getTeacherScheduleAction } from "@/actions/attendance";
+import { getTeacherTodayScheduleAction } from "@/actions/attendance";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,10 +14,11 @@ export default async function TeacherDashboardPage() {
   const ctx = await getSessionContext();
   if (!ctx || ctx.role !== "TEACHER") redirect("/login");
 
-  const schedule = await getTeacherScheduleAction();
-  const today = new Date().getDay();
-  const adjustedDay = today === 0 ? 6 : today - 1;
-  const todaySlots = schedule.filter((s) => s.dayOfWeek === adjustedDay);
+  const todaySlots = await getTeacherTodayScheduleAction();
+  const adjustedDay = (() => {
+    const today = new Date().getDay();
+    return today === 0 ? 6 : today - 1;
+  })();
 
   return (
     <PortalShell title="Teacher Portal" navItems={teacherNav} userName={ctx.name}>
@@ -46,6 +47,12 @@ export default async function TeacherDashboardPage() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-text-1">{s.subject.name}</p>
                       <p className="text-xs text-text-2">{s.classSection.name}</p>
+                      {s.isCovering && (
+                        <Badge variant="warning" hideIcon className="mt-1">Covering</Badge>
+                      )}
+                      {s.isCovered && (
+                        <Badge variant="outline" hideIcon className="mt-1">Covered by substitute</Badge>
+                      )}
                     </div>
                   </div>
                 ))}

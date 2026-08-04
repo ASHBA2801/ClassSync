@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isWithinGeofence, haversineDistanceM } from "@/lib/geofence";
-import { solveSchedule, validateSlotConflict } from "@/lib/scheduler/solver";
+import { solveSchedule, validateSlotConflict, validateTeacherFreePeriods } from "@/lib/scheduler/solver";
 
 describe("geofence", () => {
   it("returns true when within radius", () => {
@@ -19,6 +19,7 @@ describe("geofence", () => {
 describe("scheduler", () => {
   const baseInput = {
     daysPerWeek: 5,
+    workingDays: [0, 1, 2, 3, 4],
     periodsPerDay: 8,
     assignments: [
       {
@@ -28,11 +29,19 @@ describe("scheduler", () => {
         periodsPerWeek: 5,
       },
     ],
-    constraints: [{ minFreePeriods: 1, maxFreePeriods: 5 }],
+    constraints: [
+      {
+        minFreePerDay: 0,
+        maxFreePerDay: 7,
+        minFreePerWeek: 1,
+        maxFreePerWeek: 35,
+      },
+    ],
   };
 
   it("generates conflict-free schedule", () => {
     const result = solveSchedule(baseInput);
+    expect(result.success).toBe(true);
     expect(result.slots.length).toBe(5);
 
     const keys = new Set<string>();
@@ -43,6 +52,25 @@ describe("scheduler", () => {
       expect(keys.has(classKey)).toBe(false);
       keys.add(teacherKey);
       keys.add(classKey);
+    }
+  });
+
+  it("prevents teacher overlap across sections", () => {
+    const result = solveSchedule({
+      ...baseInput,
+      assignments: [
+        { teacherId: "t1", classSectionId: "c1", subjectId: "s1", periodsPerWeek: 3 },
+        { teacherId: "t1", classSectionId: "c2", subjectId: "s2", periodsPerWeek: 3 },
+      ],
+    });
+    expect(result.success).toBe(true);
+
+    for (const slot of result.slots) {
+      const sameTime = result.slots.filter(
+        (s) => s.dayOfWeek === slot.dayOfWeek && s.periodNo === slot.periodNo,
+      );
+      const teachers = new Set(sameTime.map((s) => s.teacherId));
+      expect(teachers.size).toBe(sameTime.length);
     }
   });
 
@@ -74,17 +102,60 @@ describe("scheduler", () => {
     expect(conflict).toBe("Class section is already booked in this period");
   });
 
-  it("reports unsatisfiable constraints", () => {
+  it("reports unsatisfiable period demand", () => {
     const result = solveSchedule({
       daysPerWeek: 2,
+      workingDays: [0, 1],
       periodsPerDay: 2,
       assignments: [
         { teacherId: "t1", classSectionId: "c1", subjectId: "s1", periodsPerWeek: 10 },
       ],
-      constraints: [{ minFreePeriods: 0, maxFreePeriods: 10 }],
+      constraints: [
+        { minFreePerDay: 0, maxFreePerDay: 2, minFreePerWeek: 0, maxFreePerWeek: 10 },
+      ],
     });
     expect(result.success).toBe(false);
     expect(result.errors.length).toBeGreaterThan(0);
+  });
+
+  it("respects daily free period max constraint", () => {
+    const result = solveSchedule({
+      daysPerWeek: 5,
+      workingDays: [0, 1, 2, 3, 4],
+      periodsPerDay: 4,
+      assignments: [
+        { teacherId: "t1", classSectionId: "c1", subjectId: "s1", periodsPerWeek: 10 },
+      ],
+      constraints: [
+        { minFreePerDay: 2, maxFreePerDay: 2, minFreePerWeek: 0, maxFreePerWeek: 20 },
+      ],
+    });
+    expect(result.success).toBe(true);
+    for (let day = 0; day < 5; day++) {
+      const dailyBusy = result.slots.filter((s) => s.dayOfWeek === day && s.teacherId === "t1").length;
+      expect(4 - dailyBusy).toBe(2);
+    }
+  });
+
+  it("validates teacher free periods helper", () => {
+    const slots = [
+      { dayOfWeek: 0, periodNo: 1, teacherId: "t1", classSectionId: "c1", subjectId: "s1" },
+      { dayOfWeek: 0, periodNo: 2, teacherId: "t1", classSectionId: "c1", subjectId: "s1" },
+    ];
+    const error = validateTeacherFreePeriods(
+      slots,
+      "t1",
+      4,
+      1,
+      {
+        minFreePerDay: 2,
+        maxFreePerDay: 2,
+        minFreePerWeek: 2,
+        maxFreePerWeek: 2,
+      },
+      [0],
+    );
+    expect(error).toBeNull();
   });
 });
 

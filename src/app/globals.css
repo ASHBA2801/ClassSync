@@ -3,6 +3,7 @@
 /* ── Glassmorphism design tokens ─────────────────────────────────────── */
 
 :root {
+  color-scheme: dark;
   --bg: transparent;
   --surface: rgba(12, 14, 28, 0.72);
   --surface-hover: rgba(255, 255, 255, 0.1);

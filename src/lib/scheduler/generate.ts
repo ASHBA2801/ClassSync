@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/db/prisma";
 import { getSchedulerQueue } from "@/lib/queue/queues";
+import {
+  analyzeScheduleFeasibility,
+  summarizeSchedulerErrors,
+  type SchedulerLabels,
+} from "@/lib/scheduler/errors";
+import { evaluateScheduleReadiness } from "@/lib/scheduler/readiness";
 import { solveSchedule } from "@/lib/scheduler/solver";
 import type { SchedulerInput } from "@/lib/scheduler/solver";
 
@@ -9,56 +15,72 @@ export async function enqueueScheduleGeneration(schoolId: string) {
 }
 
 export async function generateScheduleForSchool(schoolId: string) {
+  const readiness = await evaluateScheduleReadiness(schoolId);
+  if (!readiness.isReady) {
+    return {
+      success: false as const,
+      errors: readiness.checks.filter((c) => !c.passed).map((c) => c.message),
+    };
+  }
+
   const assignments = await prisma.teacherAssignment.findMany({
     where: { schoolId },
     include: {
       subject: true,
-      classSection: { include: { gradeRef: true } },
+      teacher: { select: { id: true, name: true } },
+      classSection: true,
     },
   });
-
-  const gradeIds = [...new Set(assignments.map((a) => a.classSection.gradeId))];
-  const gradeSubjects = await prisma.gradeSubject.findMany({
-    where: { schoolId, gradeId: { in: gradeIds } },
-  });
-  const gradeSubjectMap = new Map(
-    gradeSubjects.map((gs) => [`${gs.gradeId}:${gs.subjectId}`, gs.periodsPerWeek]),
-  );
 
   const constraints = await prisma.scheduleConstraint.findMany({ where: { schoolId } });
   const periodTimings = await prisma.periodTiming.findMany({
     where: { schoolId },
     orderBy: { periodNo: "asc" },
   });
+  const scheduleConfig = await prisma.schoolScheduleConfig.findUnique({ where: { schoolId } });
 
-  const periodsPerDay = periodTimings.length || 8;
-  const daysPerWeek = 5;
+  const periodsPerDay = periodTimings.length;
+  const daysPerWeek = scheduleConfig?.daysPerWeek ?? 5;
+  const workingDays = scheduleConfig?.workingDays ?? [0, 1, 2, 3, 4];
+
+  const labels: SchedulerLabels = { teachers: {}, sections: {}, subjects: {} };
+  for (const a of assignments) {
+    labels.teachers[a.teacherId] = a.teacher.name;
+    labels.sections[a.classSectionId] = a.classSection.name;
+    labels.subjects[a.subjectId] = a.subject.name;
+  }
 
   const input: SchedulerInput = {
     daysPerWeek,
+    workingDays,
     periodsPerDay,
     assignments: assignments.map((a) => ({
       teacherId: a.teacherId,
       classSectionId: a.classSectionId,
       subjectId: a.subjectId,
       periodsPerWeek:
-        a.periodsPerWeek ??
-        gradeSubjectMap.get(`${a.classSection.gradeId}:${a.subjectId}`) ??
-        a.subject.periodsPerWeek,
+        a.periodsPerWeek ?? a.subject.periodsPerWeek,
     })),
     constraints: constraints.map((c) => ({
       teacherId: c.teacherId ?? undefined,
-      minFreePeriods: c.minFreePeriods,
-      maxFreePeriods: c.maxFreePeriods,
+      minFreePerDay: c.minFreePerDay,
+      maxFreePerDay: c.maxFreePerDay,
+      minFreePerWeek: c.minFreePerWeek,
+      maxFreePerWeek: c.maxFreePerWeek,
     })),
+    labels,
   };
 
-  if (constraints.length === 0) {
-    input.constraints.push({ minFreePeriods: 1, maxFreePeriods: 3 });
+  const feasibilityErrors = analyzeScheduleFeasibility(input, labels);
+  if (feasibilityErrors.length > 0) {
+    const errors = summarizeSchedulerErrors(feasibilityErrors);
+    console.error(`[scheduler] Feasibility check failed for school ${schoolId}:`, errors);
+    return { success: false as const, errors };
   }
 
   const result = solveSchedule(input);
   if (!result.success) {
+    console.error(`[scheduler] Generation failed for school ${schoolId}:`, result.errors);
     return { success: false as const, errors: result.errors };
   }
 
@@ -85,6 +107,10 @@ export async function generateScheduleForSchool(schoolId: string) {
       ...slot,
     })),
   });
+
+  console.log(
+    `[scheduler] Generated v${newVersion} for school ${schoolId} (${result.slots.length} slots)`,
+  );
 
   return { success: true as const, versionId: version.id, slotCount: result.slots.length };
 }

@@ -6,9 +6,10 @@ DO $$
 DECLARE
   tbl TEXT;
   tables TEXT[] := ARRAY[
-    'Student', 'GuardianRelationship', 'Grade', 'GradeSubject', 'ClassSection', 'Subject',
+    'Student', 'GuardianRelationship', 'Grade', 'ClassSection', 'Subject',
     'TeacherAssignment', 'PeriodTiming', 'ScheduleVersion', 'ScheduleSlot',
-    'ScheduleConstraint', 'TeacherAttendance', 'StudentAttendance',
+    'ScheduleConstraint', 'SchoolScheduleConfig', 'ScheduleAlteration', 'ScheduleSwapGroup',
+    'TeacherAlterationStat', 'TeacherAttendance', 'StudentAttendance',
     'LeaveRequest', 'Document', 'FeeStructure', 'FeeInvoice', 'Payment',
     'NotificationLog', 'PushSubscription', 'AIServiceKey'
   ];

@@ -142,7 +142,7 @@ export async function deleteGradeAction(gradeId: string) {
       throw new Error("Cannot delete grade with existing sections");
     }
 
-    await tx.gradeSubject.deleteMany({ where: { gradeId } });
+    await tx.subject.deleteMany({ where: { gradeId } });
     return tx.grade.delete({ where: { id: gradeId } });
   });
 }
@@ -156,7 +156,7 @@ export async function listGradesAction() {
         _count: {
           select: {
             classSections: true,
-            gradeSubjects: true,
+            subjects: true,
           },
         },
         classSections: {
@@ -177,9 +177,8 @@ export async function getGradeAction(gradeId: string) {
           orderBy: { section: "asc" },
           include: { _count: { select: { students: true } } },
         },
-        gradeSubjects: {
-          include: { subject: true },
-          orderBy: { subject: { name: "asc" } },
+        subjects: {
+          orderBy: { name: "asc" },
         },
       },
     });
@@ -283,54 +282,90 @@ export async function getSectionAction(sectionId: string) {
   });
 }
 
-const gradeSubjectItemSchema = z.object({
-  subjectId: z.string().uuid(),
+const subjectSchema = z.object({
+  gradeId: z.string().uuid(),
+  name: z.string().min(1),
+  code: z.string().optional(),
+  periodsPerWeek: z.number().min(1).default(5),
+});
+
+const updateSubjectSchema = z.object({
+  name: z.string().min(1),
+  code: z.string().optional(),
   periodsPerWeek: z.number().min(1),
 });
 
-export async function setGradeSubjectsAction(
-  gradeId: string,
-  subjects: z.infer<typeof gradeSubjectItemSchema>[],
-) {
+export async function createSubjectAction(input: z.infer<typeof subjectSchema>) {
   const ctx = await requireSchoolPermission(PERMISSIONS.CLASSES_MANAGE);
-  const data = z.array(gradeSubjectItemSchema).parse(subjects);
+  const data = subjectSchema.parse(input);
 
   return withTenantContext(ctx.schoolId, async (tx) => {
     const grade = await tx.grade.findFirst({
-      where: { id: gradeId, schoolId: ctx.schoolId },
+      where: { id: data.gradeId, schoolId: ctx.schoolId },
     });
     if (!grade) throw new Error("Grade not found");
 
-    await tx.gradeSubject.deleteMany({ where: { gradeId } });
-
-    if (data.length === 0) return [];
-
-    await tx.gradeSubject.createMany({
-      data: data.map((s) => ({
-        schoolId: ctx.schoolId,
-        gradeId,
-        subjectId: s.subjectId,
-        periodsPerWeek: s.periodsPerWeek,
-      })),
-    });
-
-    return tx.gradeSubject.findMany({
-      where: { gradeId },
-      include: { subject: true },
-      orderBy: { subject: { name: "asc" } },
+    return tx.subject.create({
+      data: { schoolId: ctx.schoolId, ...data },
     });
   });
 }
 
-export async function listGradeSubjectsAction(gradeId: string) {
-  const ctx = await requireSchoolContext();
+export async function updateSubjectAction(
+  subjectId: string,
+  input: z.infer<typeof updateSubjectSchema>,
+) {
+  const ctx = await requireSchoolPermission(PERMISSIONS.CLASSES_MANAGE);
+  const data = updateSubjectSchema.parse(input);
+
   return withTenantContext(ctx.schoolId, async (tx) => {
-    return tx.gradeSubject.findMany({
-      where: { gradeId, schoolId: ctx.schoolId },
-      include: { subject: true },
-      orderBy: { subject: { name: "asc" } },
+    const subject = await tx.subject.findFirst({
+      where: { id: subjectId, schoolId: ctx.schoolId },
+    });
+    if (!subject) throw new Error("Subject not found");
+
+    return tx.subject.update({
+      where: { id: subjectId },
+      data,
     });
   });
+}
+
+export async function deleteSubjectAction(subjectId: string) {
+  const ctx = await requireSchoolPermission(PERMISSIONS.CLASSES_MANAGE);
+
+  return withTenantContext(ctx.schoolId, async (tx) => {
+    const subject = await tx.subject.findFirst({
+      where: { id: subjectId, schoolId: ctx.schoolId },
+      include: { _count: { select: { teacherAssignments: true } } },
+    });
+    if (!subject) throw new Error("Subject not found");
+    if (subject._count.teacherAssignments > 0) {
+      throw new Error("Cannot delete subject with teacher assignments");
+    }
+
+    return tx.subject.delete({ where: { id: subjectId } });
+  });
+}
+
+export async function listSubjectsByGradeAction(gradeId: string) {
+  const ctx = await requireSchoolContext();
+  return withTenantContext(ctx.schoolId, async (tx) => {
+    return tx.subject.findMany({
+      where: { gradeId, schoolId: ctx.schoolId },
+      orderBy: { name: "asc" },
+    });
+  });
+}
+
+/** @deprecated Use listSubjectsByGradeAction */
+export async function listGradeSubjectsAction(gradeId: string) {
+  const subjects = await listSubjectsByGradeAction(gradeId);
+  return subjects.map((s) => ({
+    subjectId: s.id,
+    periodsPerWeek: s.periodsPerWeek,
+    subject: { id: s.id, name: s.name },
+  }));
 }
 
 export async function listClassSectionsAction() {
@@ -340,28 +375,6 @@ export async function listClassSectionsAction() {
       orderBy: [{ gradeRef: { sortOrder: "asc" } }, { section: "asc" }],
       include: { gradeRef: true },
     });
-  });
-}
-
-const subjectSchema = z.object({
-  name: z.string().min(1),
-  code: z.string().optional(),
-  periodsPerWeek: z.number().min(1).default(5),
-});
-
-export async function createSubjectAction(input: z.infer<typeof subjectSchema>) {
-  const ctx = await requireSchoolPermission(PERMISSIONS.CLASSES_MANAGE);
-  const data = subjectSchema.parse(input);
-
-  return withTenantContext(ctx.schoolId, async (tx) => {
-    return tx.subject.create({ data: { schoolId: ctx.schoolId, ...data } });
-  });
-}
-
-export async function listSubjectsAction() {
-  const ctx = await requireSchoolContext();
-  return withTenantContext(ctx.schoolId, async (tx) => {
-    return tx.subject.findMany({ orderBy: { name: "asc" } });
   });
 }
 
@@ -377,6 +390,19 @@ export async function upsertTeacherAssignmentAction(input: z.infer<typeof assign
   const data = assignmentSchema.parse(input);
 
   return withTenantContext(ctx.schoolId, async (tx) => {
+    const section = await tx.classSection.findFirst({
+      where: { id: data.classSectionId, schoolId: ctx.schoolId },
+    });
+    if (!section) throw new Error("Section not found");
+
+    const subject = await tx.subject.findFirst({
+      where: { id: data.subjectId, schoolId: ctx.schoolId },
+    });
+    if (!subject) throw new Error("Subject not found");
+    if (subject.gradeId !== section.gradeId) {
+      throw new Error("Subject does not belong to this section's grade");
+    }
+
     await tx.teacherAssignment.deleteMany({
       where: {
         schoolId: ctx.schoolId,

@@ -3,10 +3,14 @@ import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import {
   getActiveScheduleAction,
+  getScheduleSetupStatusAction,
   listScheduleVersionsAction,
   listPeriodTimingsAction,
 } from "@/actions/scheduler";
+import { listSchoolTeachersAction } from "@/actions/smart-scheduler";
 import { ScheduleControls } from "./schedule-controls";
+import { ScheduleDayView } from "./schedule-day-view";
+import { ScheduleEditPanel } from "./schedule-edit-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -18,10 +22,12 @@ export default async function SchedulePage() {
   const ctx = await getSessionContext();
   if (!ctx || ctx.role !== "SCHOOL_ADMIN") redirect("/login");
 
-  const [schedule, versions, periods] = await Promise.all([
+  const [schedule, versions, periods, readiness, teachers] = await Promise.all([
     getActiveScheduleAction(),
     listScheduleVersionsAction(),
     listPeriodTimingsAction(),
+    getScheduleSetupStatusAction(),
+    listSchoolTeachersAction(),
   ]);
 
   const slotsByDay = new Map<number, typeof schedule extends null ? never : NonNullable<typeof schedule>["scheduleSlots"]>();
@@ -33,7 +39,12 @@ export default async function SchedulePage() {
 
   return (
     <PortalShell title="Schedule" navItems={schoolAdminNav} userName={ctx.name}>
-      <ScheduleControls periods={periods} />
+      <ScheduleControls periods={periods} readiness={readiness} />
+      <ScheduleDayView periods={periods} />
+
+      {schedule && (
+        <ScheduleEditPanel slots={schedule.scheduleSlots} teachers={teachers} />
+      )}
 
       <Card className="mt-6">
         <CardHeader>

@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createSectionAction,
+  createSubjectAction,
   deleteSectionAction,
-  setGradeSubjectsAction,
+  deleteSubjectAction,
   updateSectionAction,
+  updateSubjectAction,
 } from "@/actions/school-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FormCheckbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -37,15 +38,10 @@ interface SectionRow {
   _count: { students: number };
 }
 
-interface GradeSubjectRow {
-  subjectId: string;
-  periodsPerWeek: number;
-  subject: { id: string; name: string };
-}
-
 interface SubjectRow {
   id: string;
   name: string;
+  code: string | null;
   periodsPerWeek: number;
 }
 
@@ -53,23 +49,44 @@ export function GradeDetail({
   gradeId,
   gradeName,
   sections,
-  gradeSubjects,
-  allSubjects,
+  subjects,
 }: {
   gradeId: string;
   gradeName: string;
   sections: SectionRow[];
-  gradeSubjects: GradeSubjectRow[];
-  allSubjects: SubjectRow[];
+  subjects: SubjectRow[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [curriculumSaved, setCurriculumSaved] = useState(false);
-
-  const selectedSubjectIds = new Set(gradeSubjects.map((gs) => gs.subjectId));
+  const [subjectSaved, setSubjectSaved] = useState(false);
+  const [subjectLoading, setSubjectLoading] = useState(false);
+  const [newSubject, setNewSubject] = useState({ name: "", code: "", periodsPerWeek: "5" });
 
   async function refresh() {
     router.refresh();
+  }
+
+  async function handleAddSubject(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setSubjectSaved(false);
+    setSubjectLoading(true);
+
+    try {
+      await createSubjectAction({
+        gradeId,
+        name: newSubject.name.trim(),
+        code: newSubject.code.trim() || undefined,
+        periodsPerWeek: Number(newSubject.periodsPerWeek) || 5,
+      });
+      setSubjectSaved(true);
+      setNewSubject({ name: "", code: "", periodsPerWeek: "5" });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add subject");
+    } finally {
+      setSubjectLoading(false);
+    }
   }
 
   return (
@@ -84,6 +101,79 @@ export function GradeDetail({
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Subjects for {gradeName}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-text-2">
+            Add subjects taught in this grade. Each section will assign teachers to these subjects.
+          </p>
+          <form className="grid gap-3 sm:grid-cols-4" onSubmit={handleAddSubject}>
+            <div>
+              <Label>Name</Label>
+              <Input
+                name="name"
+                placeholder="Mathematics"
+                required
+                value={newSubject.name}
+                onChange={(e) => setNewSubject((s) => ({ ...s, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Code</Label>
+              <Input
+                name="code"
+                placeholder="MATH"
+                value={newSubject.code}
+                onChange={(e) => setNewSubject((s) => ({ ...s, code: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Periods/Week</Label>
+              <Input
+                name="periodsPerWeek"
+                type="number"
+                min={1}
+                required
+                value={newSubject.periodsPerWeek}
+                onChange={(e) => setNewSubject((s) => ({ ...s, periodsPerWeek: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button type="submit" disabled={subjectLoading}>
+                {subjectLoading ? "Adding..." : "Add Subject"}
+              </Button>
+            </div>
+          </form>
+          {subjectSaved && <p className="text-sm text-success">Subject added</p>}
+          {subjects.length === 0 ? (
+            <p className="text-sm text-text-2">No subjects yet. Add subjects for this grade.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Subject</TableHead>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Periods/Week</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {subjects.map((subject) => (
+                  <SubjectRowEditor
+                    key={subject.id}
+                    subject={subject}
+                    onError={setError}
+                    onSaved={refresh}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Sections</h2>
         <AddSectionDialog gradeId={gradeId} onSaved={refresh} />
@@ -92,7 +182,9 @@ export function GradeDetail({
       <Card>
         <CardContent className="pt-6">
           {sections.length === 0 ? (
-            <p className="text-sm text-text-2">No sections yet. Add a section to this grade.</p>
+            <p className="text-sm text-text-2">
+              No sections yet. Add a section, then assign teachers per subject.
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -140,84 +232,81 @@ export function GradeDetail({
           )}
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Grade Curriculum</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-sm text-text-2">
-            Select subjects taught in this grade and set default periods per week.
-          </p>
-          {allSubjects.length === 0 ? (
-            <p className="text-sm text-text-2">
-              Add subjects in the{" "}
-              <Link href="/admin/classes" className="text-primary hover:underline">
-                subject catalog
-              </Link>{" "}
-              first.
-            </p>
-          ) : (
-            <form
-              className="space-y-4"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const fd = new FormData(e.currentTarget);
-                const subjects = allSubjects
-                  .filter((s) => fd.get(`subject_${s.id}`) === "on")
-                  .map((s) => ({
-                    subjectId: s.id,
-                    periodsPerWeek: Number(fd.get(`periods_${s.id}`)) || s.periodsPerWeek,
-                  }));
-
-                await setGradeSubjectsAction(gradeId, subjects);
-                setCurriculumSaved(true);
-                await refresh();
-              }}
-            >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Include</TableHead>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Periods/Week</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {allSubjects.map((subject) => {
-                    const existing = gradeSubjects.find((gs) => gs.subjectId === subject.id);
-                    return (
-                      <TableRow key={subject.id}>
-                        <TableCell>
-                          <FormCheckbox
-                            name={`subject_${subject.id}`}
-                            defaultChecked={selectedSubjectIds.has(subject.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">{subject.name}</TableCell>
-                        <TableCell>
-                          <Input
-                            name={`periods_${subject.id}`}
-                            type="number"
-                            min={1}
-                            defaultValue={existing?.periodsPerWeek ?? subject.periodsPerWeek}
-                            className="w-24"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-              {curriculumSaved && (
-                <p className="text-sm text-success">Curriculum saved</p>
-              )}
-              <Button type="submit">Save Curriculum</Button>
-            </form>
-          )}
-        </CardContent>
-      </Card>
     </div>
+  );
+}
+
+function SubjectRowEditor({
+  subject,
+  onError,
+  onSaved,
+}: {
+  subject: SubjectRow;
+  onError: (msg: string | null) => void;
+  onSaved: () => Promise<void>;
+}) {
+  const formId = `subject-${subject.id}`;
+
+  return (
+    <TableRow>
+      <TableCell>
+        <Input form={formId} name="name" defaultValue={subject.name} required />
+      </TableCell>
+      <TableCell>
+        <Input form={formId} name="code" defaultValue={subject.code ?? ""} />
+      </TableCell>
+      <TableCell>
+        <Input
+          form={formId}
+          name="periodsPerWeek"
+          type="number"
+          min={1}
+          defaultValue={subject.periodsPerWeek}
+          className="w-24"
+        />
+      </TableCell>
+      <TableCell className="text-right space-x-1">
+        <form
+          id={formId}
+          className="inline"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            onError(null);
+            const fd = new FormData(e.currentTarget);
+            try {
+              await updateSubjectAction(subject.id, {
+                name: fd.get("name") as string,
+                code: (fd.get("code") as string) || undefined,
+                periodsPerWeek: Number(fd.get("periodsPerWeek")) || subject.periodsPerWeek,
+              });
+              await onSaved();
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Failed to update subject");
+            }
+          }}
+        >
+          <Button type="submit" size="sm" variant="outline">
+            Save
+          </Button>
+        </form>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-danger"
+          onClick={async () => {
+            onError(null);
+            try {
+              await deleteSubjectAction(subject.id);
+              await onSaved();
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Failed to delete subject");
+            }
+          }}
+        >
+          Delete
+        </Button>
+      </TableCell>
+    </TableRow>
   );
 }
 

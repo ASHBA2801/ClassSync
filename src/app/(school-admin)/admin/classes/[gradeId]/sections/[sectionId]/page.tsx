@@ -3,7 +3,7 @@ import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect, notFound } from "next/navigation";
 import {
   getSectionAction,
-  listGradeSubjectsAction,
+  listSubjectsByGradeAction,
   listSchoolUsersAction,
 } from "@/actions/school-admin";
 import { SectionDetail } from "../../../section-detail";
@@ -18,9 +18,9 @@ export default async function SectionPage({
   if (!ctx || ctx.role !== "SCHOOL_ADMIN") redirect("/login");
 
   const { gradeId, sectionId } = await params;
-  const [section, gradeSubjects, teachers] = await Promise.all([
+  const [section, subjects, teachers] = await Promise.all([
     getSectionAction(sectionId),
-    listGradeSubjectsAction(gradeId),
+    listSubjectsByGradeAction(gradeId),
     listSchoolUsersAction("TEACHER"),
   ]);
 
@@ -37,7 +37,11 @@ export default async function SectionPage({
         gradeName={section.gradeRef.name}
         sectionId={section.id}
         sectionLabel={section.section}
-        gradeSubjects={gradeSubjects}
+        gradeSubjects={subjects.map((s) => ({
+          subjectId: s.id,
+          periodsPerWeek: s.periodsPerWeek,
+          subject: { id: s.id, name: s.name },
+        }))}
         assignments={section.teacherAssignments}
         teachers={teachers}
       />

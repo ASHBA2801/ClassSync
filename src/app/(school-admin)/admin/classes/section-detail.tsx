@@ -101,9 +101,9 @@ export function SectionDetail({
         <CardContent>
           {gradeSubjects.length === 0 ? (
             <p className="text-sm text-text-2">
-              Configure subjects for this grade in the{" "}
+              Add subjects for this grade on the{" "}
               <Link href={`/admin/classes/${gradeId}`} className="text-primary hover:underline">
-                grade curriculum
+                grade page
               </Link>{" "}
               first.
             </p>

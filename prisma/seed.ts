@@ -105,17 +105,12 @@ async function main() {
   });
 
   const subject = await prisma.subject.upsert({
-    where: { schoolId_name: { schoolId: school.id, name: "Mathematics" } },
-    create: { schoolId: school.id, name: "Mathematics", code: "MATH", periodsPerWeek: 5 },
-    update: {},
-  });
-
-  await prisma.gradeSubject.upsert({
-    where: { gradeId_subjectId: { gradeId: grade.id, subjectId: subject.id } },
+    where: { gradeId_name: { gradeId: grade.id, name: "Mathematics" } },
     create: {
       schoolId: school.id,
       gradeId: grade.id,
-      subjectId: subject.id,
+      name: "Mathematics",
+      code: "MATH",
       periodsPerWeek: 5,
     },
     update: {},
@@ -174,9 +169,21 @@ async function main() {
   });
   if (!existingConstraint) {
     await prisma.scheduleConstraint.create({
-      data: { schoolId: school.id, minFreePeriods: 1, maxFreePeriods: 3 },
+      data: {
+        schoolId: school.id,
+        minFreePerDay: 0,
+        maxFreePerDay: 3,
+        minFreePerWeek: 1,
+        maxFreePerWeek: 10,
+      },
     });
   }
+
+  await prisma.schoolScheduleConfig.upsert({
+    where: { schoolId: school.id },
+    create: { schoolId: school.id, daysPerWeek: 5, workingDays: [0, 1, 2, 3, 4] },
+    update: {},
+  });
 
   console.log("Seed complete!");
   console.log("System Admin: admin@classsync.app / admin123");

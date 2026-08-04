@@ -6,7 +6,7 @@ A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, 
 
 - **Multi-tenancy** with PostgreSQL Row-Level Security (RLS) backstop
 - **Roles:** System Admin, School Admin, Teacher, Parent (students are records, not accounts)
-- **Conflict-free class scheduler** (CSP backtracking solver)
+- **Conflict-free class scheduler** (CSP backtracking with setup gatekeeper wizard)
 - **Teacher attendance** with geofence + face recognition queue + retry/escalation flow
 - **Parent portal** for documents, leave requests, fee payments
 - **Per-tenant Razorpay** payment integration with encrypted keys
@@ -107,6 +107,21 @@ Add managed PostgreSQL and Redis add-ons.
 - Install via browser "Add to Home Screen"
 - iOS Safari: camera/geolocation work in installed PWA; background push is limited
 - Offline page at `/offline`; attendance syncs via Background Sync API when available
+
+## Timetable & Scheduling
+
+The timetable module follows a strict sequential setup before generation:
+
+1. **Grades & Sections** — `/admin/classes`
+2. **Session (Period) Configuration** — `/admin/schedule/setup?step=2`
+3. **Subject Mapping** — per-grade curriculum on grade detail pages
+4. **Teacher Assignments & Free-Period Rules** — `/admin/schedule/setup?step=4`
+5. **Review & Generate** — `/admin/schedule/setup?step=5`
+
+Generation is blocked until all readiness checks pass (`src/lib/scheduler/readiness.ts`). The solver uses CSP backtracking with MRV ordering to enforce teacher/section overlap prevention, exact weekly period counts, and per-day/per-week free-period limits.
+
+Setup wizard: `/admin/schedule/setup`  
+View generated timetable: `/admin/schedule`
 
 ## Project Structure
 

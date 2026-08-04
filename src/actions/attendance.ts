@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { resolveEffectiveSlots, startOfDay } from "@/lib/scheduler/smart-scheduler";
 import { prisma, withTenantContext } from "@/lib/db/prisma";
 import { requireSchoolContext, requireSchoolPermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
@@ -176,6 +177,53 @@ export async function getTeacherScheduleAction() {
       where: { versionId: version.id, teacherId: ctx.userId },
       include: { classSection: true, subject: true },
       orderBy: [{ dayOfWeek: "asc" }, { periodNo: "asc" }],
+    });
+  });
+}
+
+export async function getTeacherTodayScheduleAction() {
+  const ctx = await requireSchoolPermission(PERMISSIONS.SCHEDULE_VIEW);
+
+  return withTenantContext(ctx.schoolId, async (tx) => {
+    const date = startOfDay(new Date());
+    const effective = await resolveEffectiveSlots(ctx.schoolId, date, tx);
+    return effective
+      .filter((s) => s.teacherId === ctx.userId || s.originalTeacherId === ctx.userId)
+      .map((s) => ({
+        id: s.id ?? s.alterationId ?? `${s.periodNo}-${s.classSectionId}`,
+        dayOfWeek: s.dayOfWeek,
+        periodNo: s.periodNo,
+        teacherId: s.teacherId,
+        classSectionId: s.classSectionId,
+        subjectId: s.subjectId,
+        classSection: s.classSection!,
+        subject: s.subject!,
+        isAltered: s.isAltered,
+        originalTeacherId: s.originalTeacherId,
+        alterationType: s.alterationType,
+        isCovering: s.isAltered && s.teacherId === ctx.userId,
+        isCovered: s.isAltered && s.originalTeacherId === ctx.userId,
+      }))
+      .sort((a, b) => a.periodNo - b.periodNo);
+  });
+}
+
+export async function getTeacherUpcomingAlterationsAction() {
+  const ctx = await requireSchoolPermission(PERMISSIONS.SCHEDULE_VIEW);
+
+  return withTenantContext(ctx.schoolId, async (tx) => {
+    return tx.scheduleAlteration.findMany({
+      where: {
+        schoolId: ctx.schoolId,
+        status: "ACTIVE",
+        date: { gte: startOfDay(new Date()) },
+        OR: [
+          { originalTeacherId: ctx.userId },
+          { substituteTeacherId: ctx.userId },
+        ],
+      },
+      include: { classSection: true, subject: true },
+      orderBy: [{ date: "asc" }, { periodNo: "asc" }],
     });
   });
 }

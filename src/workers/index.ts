@@ -5,6 +5,7 @@ import { getFaceRecognitionProvider } from "../lib/face/FaceRecognitionProvider"
 import { sendNotification, NotificationPayload } from "../lib/notifications";
 import { generateScheduleForSchool } from "../lib/scheduler/generate";
 import { enqueueNotification } from "../lib/notifications";
+import { resolveEffectiveSlots, dateToDayOfWeek, startOfDay } from "../lib/scheduler/smart-scheduler";
 
 interface FaceVerificationJob {
   attendanceId: string;
@@ -72,13 +73,38 @@ async function processNotification(job: Job<NotificationPayload>) {
 }
 
 async function processScheduler(job: Job<{ schoolId: string }>) {
-  return generateScheduleForSchool(job.data.schoolId);
+  console.log(`[scheduler] Worker processing job ${job.id} for school ${job.data.schoolId}`);
+  const result = await generateScheduleForSchool(job.data.schoolId);
+
+  if (result.success) {
+    console.log(
+      `[scheduler] Worker completed job ${job.id}: v${result.versionId} (${result.slotCount} slots)`,
+    );
+  } else {
+    console.error(`[scheduler] Worker job ${job.id} failed:`, result.errors);
+    const admins = await prisma.userSchoolMembership.findMany({
+      where: { schoolId: job.data.schoolId, role: "SCHOOL_ADMIN", isActive: true },
+    });
+
+    for (const admin of admins) {
+      await enqueueNotification({
+        schoolId: job.data.schoolId,
+        userId: admin.userId,
+        title: "Schedule Generation Failed",
+        body: result.errors.slice(0, 2).join("; ") || "Could not generate timetable",
+        metadata: { errors: result.errors },
+      });
+    }
+  }
+
+  return result;
 }
 
 async function processScheduleReminders() {
   const schools = await prisma.school.findMany({ where: { status: "ACTIVE" } });
   const now = new Date();
-  const dayOfWeek = now.getDay();
+  const today = startOfDay(now);
+  const dayOfWeek = dateToDayOfWeek(now);
 
   for (const school of schools) {
     const version = await prisma.scheduleVersion.findFirst({
@@ -86,16 +112,14 @@ async function processScheduleReminders() {
     });
     if (!version) continue;
 
-    const slots = await prisma.scheduleSlot.findMany({
-      where: { versionId: version.id, dayOfWeek },
-      include: { subject: true, classSection: true },
-    });
+    const effective = await resolveEffectiveSlots(school.id, today);
+    const daySlots = effective.filter((s) => s.dayOfWeek === dayOfWeek);
 
     const timings = await prisma.periodTiming.findMany({
       where: { schoolId: school.id },
     });
 
-    for (const slot of slots) {
+    for (const slot of daySlots) {
       const timing = timings.find((t) => t.periodNo === slot.periodNo);
       if (!timing) continue;
 
@@ -105,12 +129,14 @@ async function processScheduleReminders() {
 
       const diffMs = periodStart.getTime() - now.getTime();
       if (diffMs > 0 && diffMs <= 5 * 60 * 1000) {
+        const sectionName = slot.classSection?.name ?? "class";
+        const subjectName = slot.subject?.name ?? "subject";
         await enqueueNotification({
           schoolId: school.id,
           userId: slot.teacherId,
           title: "Upcoming Class",
-          body: `${slot.subject.name} with ${slot.classSection.name} starts at ${timing.startTime}`,
-          metadata: { slotId: slot.id },
+          body: `${subjectName} with ${sectionName} starts at ${timing.startTime}`,
+          metadata: { slotId: slot.id, isAltered: slot.isAltered },
         });
       }
     }

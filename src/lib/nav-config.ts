@@ -38,7 +38,8 @@ export const schoolAdminNav: NavItem[] = [
   { href: "/admin/teachers", label: "Teachers", icon: "user-check" },
   { href: "/admin/students", label: "Students", icon: "graduation-cap" },
   { href: "/admin/classes", label: "Classes", icon: "book-open" },
-  { href: "/admin/schedule", label: "Schedule", icon: "calendar-days" },
+  { href: "/admin/schedule/setup", label: "Timetable Setup", icon: "calendar-days" },
+  { href: "/admin/schedule", label: "Schedule", icon: "calendar" },
   { href: "/admin/attendance", label: "Attendance", icon: "clipboard-check" },
   { href: "/admin/leave", label: "Leave Requests", icon: "file-text" },
   { href: "/admin/fees", label: "Fees", icon: "dollar-sign" },
@@ -48,6 +49,7 @@ export const schoolAdminNav: NavItem[] = [
 export const teacherNav: NavItem[] = [
   { href: "/teacher", label: "Dashboard", icon: "layout-dashboard" },
   { href: "/teacher/schedule", label: "Schedule", icon: "calendar" },
+  { href: "/teacher/schedule/swaps", label: "Swaps", icon: "clock" },
   { href: "/teacher/attendance", label: "Mark Attendance", icon: "clipboard-check" },
   { href: "/teacher/leave", label: "Leave Requests", icon: "clock" },
 ];

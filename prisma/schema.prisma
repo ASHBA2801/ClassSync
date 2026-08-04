@@ -38,6 +38,22 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum ScheduleAlterationType {
+  LEAVE_SUBSTITUTION
+  SWAP
+  ADMIN_OVERRIDE
+}
+
+enum ScheduleAlterationStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum ScheduleSwapType {
+  COMPLEMENTARY_FREE
+  PARALLEL_SECTIONS
+}
+
 enum TeacherAttendanceStatus {
   PROCESSING
   PRESENT
@@ -109,11 +125,14 @@ model School {
   grades              Grade[]
   classSections       ClassSection[]
   subjects            Subject[]
-  gradeSubjects       GradeSubject[]
   teacherAssignments  TeacherAssignment[]
   scheduleSlots       ScheduleSlot[]
   scheduleConstraints ScheduleConstraint[]
+  scheduleConfig      SchoolScheduleConfig?
   scheduleVersions    ScheduleVersion[]
+  scheduleAlterations ScheduleAlteration[]
+  scheduleSwapGroups  ScheduleSwapGroup[]
+  teacherAlterationStats TeacherAlterationStat[]
   periodTimings       PeriodTiming[]
   teacherAttendances  TeacherAttendance[]
   studentAttendances  StudentAttendance[]
@@ -144,6 +163,9 @@ model User {
   teacherAssignments    TeacherAssignment[]
   teacherAttendances    TeacherAttendance[]
   leaveRequests         LeaveRequest[]
+  scheduleAlterationsCreated ScheduleAlteration[] @relation("AlterationCreator")
+  scheduleSwapGroupsCreated  ScheduleSwapGroup[]  @relation("SwapGroupCreator")
+  teacherAlterationStats     TeacherAlterationStat[]
   pushSubscriptions     PushSubscription[]
   auditLogs             AuditLog[]             @relation("AuditActor")
 }
@@ -231,7 +253,7 @@ model Grade {
 
   school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSections  ClassSection[]
-  gradeSubjects  GradeSubject[]
+  subjects       Subject[]
   feeStructures  FeeStructure[]
 
   @@unique([schoolId, name])
@@ -253,6 +275,7 @@ model ClassSection {
   students           Student[]
   teacherAssignments TeacherAssignment[]
   scheduleSlots      ScheduleSlot[]
+  scheduleAlterations ScheduleAlteration[]
   feeStructures      FeeStructure[]
 
   @@unique([schoolId, gradeId, section])
@@ -260,24 +283,10 @@ model ClassSection {
   @@index([gradeId])
 }
 
-model GradeSubject {
-  id             String @id @default(uuid()) @db.Uuid
-  schoolId       String @db.Uuid
-  gradeId        String @db.Uuid
-  subjectId      String @db.Uuid
-  periodsPerWeek Int    @default(5)
-
-  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  grade   Grade   @relation(fields: [gradeId], references: [id], onDelete: Cascade)
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-
-  @@unique([gradeId, subjectId])
-  @@index([schoolId])
-}
-
 model Subject {
   id             String   @id @default(uuid()) @db.Uuid
   schoolId       String   @db.Uuid
+  gradeId        String   @db.Uuid
   name           String
   code           String?
   periodsPerWeek Int      @default(5)
@@ -285,12 +294,14 @@ model Subject {
   updatedAt      DateTime @updatedAt
 
   school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  grade              Grade               @relation(fields: [gradeId], references: [id], onDelete: Cascade)
   teacherAssignments TeacherAssignment[]
   scheduleSlots      ScheduleSlot[]
-  gradeSubjects      GradeSubject[]
+  scheduleAlterations ScheduleAlteration[]
 
-  @@unique([schoolId, name])
+  @@unique([gradeId, name])
   @@index([schoolId])
+  @@index([gradeId])
 }
 
 model TeacherAssignment {
@@ -358,17 +369,28 @@ model ScheduleSlot {
 }
 
 model ScheduleConstraint {
-  id              String   @id @default(uuid()) @db.Uuid
-  schoolId        String   @db.Uuid
-  teacherId       String?  @db.Uuid
-  minFreePeriods  Int      @default(1)
-  maxFreePeriods  Int      @default(3)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  teacherId      String?  @db.Uuid
+  minFreePerDay  Int      @default(0)
+  maxFreePerDay  Int      @default(3)
+  minFreePerWeek Int      @default(1)
+  maxFreePerWeek Int      @default(10)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@unique([schoolId, teacherId])
+}
+
+model SchoolScheduleConfig {
+  id          String @id @default(uuid()) @db.Uuid
+  schoolId    String @unique @db.Uuid
+  daysPerWeek Int    @default(5)
+  workingDays Int[]  @default([0, 1, 2, 3, 4])
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model TeacherAttendance {
@@ -436,15 +458,81 @@ model LeaveRequest {
   status        LeaveStatus        @default(PENDING)
   reviewedBy    String?            @db.Uuid
   reviewedAt    DateTime?
-  reviewNote    String?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  reviewNote              String?
+  substitutionsGenerated  Boolean            @default(false)
+  alteredClassCount       Int?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
 
-  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  requester User     @relation(fields: [requesterId], references: [id], onDelete: Cascade)
-  student   Student? @relation(fields: [studentId], references: [id])
+  school       School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  requester    User                 @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  student      Student?             @relation(fields: [studentId], references: [id])
+  alterations  ScheduleAlteration[]
 
   @@index([schoolId, status])
+}
+
+model ScheduleSwapGroup {
+  id         String           @id @default(uuid()) @db.Uuid
+  schoolId   String           @db.Uuid
+  type       ScheduleSwapType
+  teacherAId String           @db.Uuid
+  teacherBId String           @db.Uuid
+  note       String?
+  createdBy  String           @db.Uuid
+  createdAt  DateTime         @default(now())
+
+  school       School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  creator      User                 @relation("SwapGroupCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  alterations  ScheduleAlteration[]
+
+  @@index([schoolId])
+}
+
+model ScheduleAlteration {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  schoolId            String                   @db.Uuid
+  date                DateTime                 @db.Date
+  periodNo            Int
+  classSectionId      String                   @db.Uuid
+  subjectId           String                   @db.Uuid
+  originalTeacherId   String                   @db.Uuid
+  substituteTeacherId String                   @db.Uuid
+  type                ScheduleAlterationType
+  priorityLevel       Int?
+  leaveRequestId      String?                  @db.Uuid
+  swapGroupId         String?                  @db.Uuid
+  status              ScheduleAlterationStatus @default(ACTIVE)
+  createdBy           String                   @db.Uuid
+  createdAt           DateTime                 @default(now())
+
+  school       School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection ClassSection       @relation(fields: [classSectionId], references: [id])
+  subject      Subject            @relation(fields: [subjectId], references: [id])
+  leaveRequest LeaveRequest?      @relation(fields: [leaveRequestId], references: [id], onDelete: SetNull)
+  swapGroup    ScheduleSwapGroup? @relation(fields: [swapGroupId], references: [id], onDelete: SetNull)
+  creator      User               @relation("AlterationCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, date, periodNo, classSectionId, status])
+  @@index([schoolId, date])
+  @@index([schoolId, originalTeacherId])
+  @@index([schoolId, substituteTeacherId])
+  @@index([leaveRequestId])
+  @@index([swapGroupId])
+}
+
+model TeacherAlterationStat {
+  id                     String   @id @default(uuid()) @db.Uuid
+  schoolId               String   @db.Uuid
+  teacherId              String   @db.Uuid
+  asSubstituteCount      Int      @default(0)
+  classesAlteredForCount Int      @default(0)
+  updatedAt              DateTime @updatedAt
+
+  school  School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, teacherId])
 }
 
 model Document {

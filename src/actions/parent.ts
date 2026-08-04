@@ -6,6 +6,7 @@ import { requireSchoolContext, requireSchoolPermission } from "@/lib/rbac/guard"
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { getPresignedUploadUrl, buildS3Key } from "@/lib/storage/s3";
 import { enqueueNotification } from "@/lib/notifications";
+import { applyLeaveSubstitutions } from "@/lib/scheduler/smart-scheduler";
 
 export async function getLinkedStudentsAction() {
   const ctx = await requireSchoolContext();
@@ -151,9 +152,10 @@ export async function listLeaveRequestsForReviewAction() {
   const ctx = await requireSchoolPermission(PERMISSIONS.LEAVE_MANAGE);
   return withTenantContext(ctx.schoolId, async (tx) => {
     return tx.leaveRequest.findMany({
-      where: { schoolId: ctx.schoolId, status: "PENDING" },
+      where: { schoolId: ctx.schoolId },
       include: { requester: true, student: true },
       orderBy: { createdAt: "desc" },
+      take: 50,
     });
   });
 }
@@ -187,6 +189,10 @@ export async function reviewLeaveRequestAction(input: z.infer<typeof reviewLeave
     body: `Your leave request was ${data.status.toLowerCase()}.`,
     metadata: { leaveRequestId: updated.id, status: data.status },
   });
+
+  if (data.status === "APPROVED" && updated.requesterType === "TEACHER") {
+    await applyLeaveSubstitutions(updated.id, ctx.userId);
+  }
 
   return updated;
 }
