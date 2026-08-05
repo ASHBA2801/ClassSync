@@ -27,8 +27,6 @@ const baseInput: SchedulerInput = {
   ],
   constraints: [
     {
-      minFreePerDay: 0,
-      maxFreePerDay: 2,
       minFreePerWeek: 0,
       maxFreePerWeek: 5,
     },

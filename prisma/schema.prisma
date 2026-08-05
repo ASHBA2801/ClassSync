@@ -372,8 +372,7 @@ model ScheduleConstraint {
   id             String   @id @default(uuid()) @db.Uuid
   schoolId       String   @db.Uuid
   teacherId      String?  @db.Uuid
-  minFreePerDay  Int      @default(0)
-  maxFreePerDay  Int      @default(3)
+  /// Minimum free periods per week. Default 1; set to 0 to disable the minimum.
   minFreePerWeek Int      @default(1)
   maxFreePerWeek Int      @default(10)
   createdAt      DateTime @default(now())
@@ -385,10 +384,13 @@ model ScheduleConstraint {
 }
 
 model SchoolScheduleConfig {
-  id          String @id @default(uuid()) @db.Uuid
-  schoolId    String @unique @db.Uuid
-  daysPerWeek Int    @default(5)
-  workingDays Int[]  @default([0, 1, 2, 3, 4])
+  id                        String @id @default(uuid()) @db.Uuid
+  schoolId                  String @unique @db.Uuid
+  daysPerWeek               Int    @default(5)
+  workingDays               Int[]  @default([0, 1, 2, 3, 4])
+  maxSameSubjectPerDay      Int    @default(2)
+  maxConsecutiveSameSubject Int    @default(3)
+  requireFullSectionWeek    Boolean @default(true)
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }

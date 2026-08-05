@@ -6,7 +6,7 @@ import {
   type SchedulerLabels,
 } from "@/lib/scheduler/errors";
 import { evaluateScheduleReadiness } from "@/lib/scheduler/readiness";
-import { solveSchedule } from "@/lib/scheduler/solver";
+import { solveSchedule, DEFAULT_TIMETABLE_QUALITY } from "@/lib/scheduler/solver";
 import type { SchedulerInput } from "@/lib/scheduler/solver";
 
 export async function enqueueScheduleGeneration(schoolId: string) {
@@ -63,11 +63,16 @@ export async function generateScheduleForSchool(schoolId: string) {
     })),
     constraints: constraints.map((c) => ({
       teacherId: c.teacherId ?? undefined,
-      minFreePerDay: c.minFreePerDay,
-      maxFreePerDay: c.maxFreePerDay,
       minFreePerWeek: c.minFreePerWeek,
       maxFreePerWeek: c.maxFreePerWeek,
     })),
+    quality: scheduleConfig
+      ? {
+          maxSameSubjectPerDay: scheduleConfig.maxSameSubjectPerDay,
+          maxConsecutiveSameSubject: scheduleConfig.maxConsecutiveSameSubject,
+          requireFullSectionWeek: scheduleConfig.requireFullSectionWeek,
+        }
+      : DEFAULT_TIMETABLE_QUALITY,
     labels,
   };
 

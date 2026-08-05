@@ -17,8 +17,6 @@ export interface SetupCheck {
 }
 
 export interface EffectiveConstraint {
-  minFreePerDay: number;
-  maxFreePerDay: number;
   minFreePerWeek: number;
   maxFreePerWeek: number;
 }
@@ -56,8 +54,6 @@ export interface TeacherAssignmentRow {
 
 export interface ScheduleConstraintRow {
   teacherId: string | null;
-  minFreePerDay: number;
-  maxFreePerDay: number;
   minFreePerWeek: number;
   maxFreePerWeek: number;
 }
@@ -138,8 +134,6 @@ export function getEffectiveConstraint(
   const override = constraints.find((c) => c.teacherId === teacherId);
   if (override) {
     return {
-      minFreePerDay: override.minFreePerDay,
-      maxFreePerDay: override.maxFreePerDay,
       minFreePerWeek: override.minFreePerWeek,
       maxFreePerWeek: override.maxFreePerWeek,
     };
@@ -149,8 +143,6 @@ export function getEffectiveConstraint(
   if (!global) return null;
 
   return {
-    minFreePerDay: global.minFreePerDay,
-    maxFreePerDay: global.maxFreePerDay,
     minFreePerWeek: global.minFreePerWeek,
     maxFreePerWeek: global.maxFreePerWeek,
   };
@@ -159,15 +151,14 @@ export function getEffectiveConstraint(
 export function validateConstraintSanity(
   constraint: EffectiveConstraint,
   periodsPerDay: number,
+  daysPerWeek = 5,
 ): string | null {
-  if (constraint.minFreePerDay > constraint.maxFreePerDay) {
-    return "Minimum free periods per day cannot exceed maximum";
-  }
   if (constraint.minFreePerWeek > constraint.maxFreePerWeek) {
     return "Minimum free periods per week cannot exceed maximum";
   }
-  if (constraint.maxFreePerDay > periodsPerDay) {
-    return `Maximum free periods per day (${constraint.maxFreePerDay}) exceeds periods per day (${periodsPerDay})`;
+  const totalWeeklySlots = periodsPerDay * daysPerWeek;
+  if (constraint.maxFreePerWeek > totalWeeklySlots) {
+    return `Maximum free periods per week (${constraint.maxFreePerWeek}) exceeds total weekly slots (${totalWeeklySlots})`;
   }
   return null;
 }
@@ -178,11 +169,13 @@ export interface ReadinessInput {
   assignments: TeacherAssignmentRow[];
   constraints: ScheduleConstraintRow[];
   daysPerWeek: number;
+  requireFullSectionWeek?: boolean;
 }
 
 export function evaluateReadinessFromData(input: ReadinessInput): ScheduleReadiness {
   const checks: SetupCheck[] = [];
-  const { grades, periods, assignments, constraints, daysPerWeek } = input;
+  const { grades, periods, assignments, constraints, daysPerWeek, requireFullSectionWeek = true } =
+    input;
 
   const gradeCount = grades.length;
   const sectionCount = grades.reduce((sum, g) => sum + g.classSections.length, 0);
@@ -280,7 +273,11 @@ export function evaluateReadinessFromData(input: ReadinessInput): ScheduleReadin
       fixHref: "/admin/schedule/setup?step=4",
     });
   } else {
-    const globalSanity = validateConstraintSanity(globalConstraint, periodCount || 8);
+    const globalSanity = validateConstraintSanity(
+      globalConstraint,
+      periodCount || 8,
+      daysPerWeek,
+    );
     if (globalSanity) {
       checks.push({
         step: "constraints",
@@ -306,7 +303,7 @@ export function evaluateReadinessFromData(input: ReadinessInput): ScheduleReadin
       teachersWithoutConstraint.push(teacherId);
       continue;
     }
-    const sanity = validateConstraintSanity(effective, periodCount || 8);
+    const sanity = validateConstraintSanity(effective, periodCount || 8, daysPerWeek);
     if (sanity) {
       checks.push({
         step: "constraints",
@@ -326,16 +323,38 @@ export function evaluateReadinessFromData(input: ReadinessInput): ScheduleReadin
   }
 
   const periodsPerDay = periodCount || 0;
+  const weeklySlotsPerSection = daysPerWeek * periodsPerDay;
   let totalRequiredPeriods = 0;
+  const sectionsUnderFilled: string[] = [];
+
   for (const grade of grades) {
     for (const section of grade.classSections) {
+      let sectionTotal = 0;
       for (const subject of grade.subjects) {
-        const assignment = assignments.find(
-          (a) => a.classSectionId === section.id && a.subjectId === subject.id,
+        sectionTotal += subject.periodsPerWeek;
+      }
+      totalRequiredPeriods += sectionTotal;
+
+      if (
+        requireFullSectionWeek &&
+        periodsPerDay > 0 &&
+        sectionTotal > 0 &&
+        sectionTotal !== weeklySlotsPerSection
+      ) {
+        sectionsUnderFilled.push(
+          `${section.name}: ${sectionTotal}/${weeklySlotsPerSection} periods/week`,
         );
-        totalRequiredPeriods += assignment ? subject.periodsPerWeek : subject.periodsPerWeek;
       }
     }
+  }
+
+  if (requireFullSectionWeek && sectionsUnderFilled.length > 0) {
+    checks.push({
+      step: "subjects",
+      passed: false,
+      message: `Class timetables must fill all working-day periods. Under-filled: ${sectionsUnderFilled.join("; ")}`,
+      fixHref: "/admin/schedule/setup?step=3",
+    });
   }
 
   const maxCapacity = daysPerWeek * periodsPerDay * Math.max(sectionCount, 1);
@@ -400,5 +419,6 @@ export async function evaluateScheduleReadiness(schoolId: string): Promise<Sched
     assignments,
     constraints,
     daysPerWeek: scheduleConfig?.daysPerWeek ?? 5,
+    requireFullSectionWeek: scheduleConfig?.requireFullSectionWeek ?? true,
   });
 }

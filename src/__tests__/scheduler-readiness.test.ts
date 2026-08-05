@@ -25,8 +25,6 @@ const baseInput: ReadinessInput = {
   constraints: [
     {
       teacherId: null,
-      minFreePerDay: 0,
-      maxFreePerDay: 2,
       minFreePerWeek: 1,
       maxFreePerWeek: 10,
     },
@@ -99,20 +97,16 @@ describe("scheduler readiness", () => {
     const effective = getEffectiveConstraint("t1", [
       {
         teacherId: null,
-        minFreePerDay: 0,
-        maxFreePerDay: 3,
         minFreePerWeek: 1,
         maxFreePerWeek: 10,
       },
       {
         teacherId: "t1",
-        minFreePerDay: 1,
-        maxFreePerDay: 2,
         minFreePerWeek: 2,
         maxFreePerWeek: 8,
       },
     ]);
-    expect(effective?.minFreePerDay).toBe(1);
+    expect(effective?.minFreePerWeek).toBe(2);
     expect(effective?.maxFreePerWeek).toBe(8);
   });
 
@@ -123,11 +117,12 @@ describe("scheduler readiness", () => {
 
   it("validates constraint sanity", () => {
     expect(
-      validateConstraintSanity(
-        { minFreePerDay: 2, maxFreePerDay: 1, minFreePerWeek: 1, maxFreePerWeek: 5 },
-        8,
-      ),
-    ).toContain("day");
+      validateConstraintSanity({ minFreePerWeek: 5, maxFreePerWeek: 1 }, 8, 5),
+    ).toContain("week");
+  });
+
+  it("allows disabling minimum free hours with zero", () => {
+    expect(validateConstraintSanity({ minFreePerWeek: 0, maxFreePerWeek: 10 }, 8, 5)).toBeNull();
   });
 
   it("parses time strings", () => {

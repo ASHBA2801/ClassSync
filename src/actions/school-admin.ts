@@ -3,6 +3,7 @@
 import { hash } from "bcryptjs";
 import { z } from "zod";
 import { prisma, withTenantContext } from "@/lib/db/prisma";
+import { getGradeForSchool, getSectionForSchool } from "@/lib/school/queries";
 import { requireSchoolContext, requireSchoolPermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -169,20 +170,7 @@ export async function listGradesAction() {
 
 export async function getGradeAction(gradeId: string) {
   const ctx = await requireSchoolContext();
-  return withTenantContext(ctx.schoolId, async (tx) => {
-    return tx.grade.findFirst({
-      where: { id: gradeId, schoolId: ctx.schoolId },
-      include: {
-        classSections: {
-          orderBy: { section: "asc" },
-          include: { _count: { select: { students: true } } },
-        },
-        subjects: {
-          orderBy: { name: "asc" },
-        },
-      },
-    });
-  });
+  return getGradeForSchool(ctx.schoolId, gradeId);
 }
 
 const sectionSchema = z.object({
@@ -269,17 +257,7 @@ export async function listSectionsByGradeAction(gradeId: string) {
 
 export async function getSectionAction(sectionId: string) {
   const ctx = await requireSchoolContext();
-  return withTenantContext(ctx.schoolId, async (tx) => {
-    return tx.classSection.findFirst({
-      where: { id: sectionId, schoolId: ctx.schoolId },
-      include: {
-        gradeRef: true,
-        teacherAssignments: {
-          include: { teacher: true, subject: true },
-        },
-      },
-    });
-  });
+  return getSectionForSchool(ctx.schoolId, sectionId);
 }
 
 const subjectSchema = z.object({

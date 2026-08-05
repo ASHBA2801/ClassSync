@@ -4,6 +4,7 @@ import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import {
   getScheduleSetupStatusAction,
+  getSchoolScheduleConfigAction,
   listPeriodTimingsAction,
   listScheduleConstraintsAction,
 } from "@/actions/scheduler";
@@ -35,11 +36,12 @@ export default async function ScheduleSetupPage({
   const params = await searchParams;
   const currentStep = Math.min(5, Math.max(1, Number(params.step) || 1));
 
-  const [readiness, periods, constraints, teachers, grades] = await Promise.all([
+  const [readiness, periods, constraints, teachers, scheduleConfig, grades] = await Promise.all([
     getScheduleSetupStatusAction(),
     listPeriodTimingsAction(),
     listScheduleConstraintsAction(),
     listSchoolUsersAction("TEACHER"),
+    getSchoolScheduleConfigAction(),
     withTenantContext(schoolId, async (tx) => {
       return tx.grade.findMany({
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -161,7 +163,9 @@ export default async function ScheduleSetupPage({
       )}
 
       {currentStep === 1 && <GradesStep readiness={readiness} grades={gradesForSteps} />}
-      {currentStep === 2 && <PeriodsStep periods={periods} readiness={readiness} />}
+      {currentStep === 2 && (
+        <PeriodsStep periods={periods} readiness={readiness} scheduleConfig={scheduleConfig} />
+      )}
       {currentStep === 3 && (
         <SubjectsStep readiness={readiness} grades={gradesForSteps} />
       )}

@@ -20,8 +20,6 @@ function getConstraint(teacherId: string, constraints: ScheduleConstraintConfig[
   return (
     constraints.find((c) => c.teacherId === teacherId) ??
     constraints.find((c) => !c.teacherId) ?? {
-      minFreePerDay: 0,
-      maxFreePerDay: 3,
       minFreePerWeek: 1,
       maxFreePerWeek: 10,
     }
@@ -40,17 +38,14 @@ export function analyzeScheduleFeasibility(
   labels: SchedulerLabels,
 ): string[] {
   const errors: string[] = [];
-  const { assignments, constraints, daysPerWeek, periodsPerDay, workingDays } = input;
+  const { assignments, constraints, daysPerWeek, periodsPerDay } = input;
   const totalWeeklySlots = daysPerWeek * periodsPerDay;
-  const activeDays = workingDays.slice(0, daysPerWeek);
 
   const teacherIds = [...new Set(assignments.map((a) => a.teacherId))];
   const globalConstraint = constraints.find((c) => !c.teacherId);
 
   if (globalConstraint && teacherIds.length > 0) {
     const minWeeklyBusy = totalWeeklySlots - globalConstraint.maxFreePerWeek;
-    const minDailyBusy = periodsPerDay - globalConstraint.maxFreePerDay;
-    const minWeeklyFromDaily = activeDays.length * minDailyBusy;
 
     const belowWeeklyMin = teacherIds.filter(
       (id) => teacherWeeklyLoad(assignments, id) < minWeeklyBusy,
@@ -58,16 +53,6 @@ export function analyzeScheduleFeasibility(
     if (belowWeeklyMin.length === teacherIds.length) {
       errors.push(
         `Global rules require every teacher to teach at least ${minWeeklyBusy} periods/week (${totalWeeklySlots} slots minus max ${globalConstraint.maxFreePerWeek} free/week). Your teachers are assigned far less — increase "Max Free / Week" in Schedule Setup → Rules (Step 4), or assign more classes.`,
-      );
-    }
-
-    const belowDailyMin = teacherIds.filter((id) => {
-      const assigned = teacherWeeklyLoad(assignments, id);
-      return assigned > 0 && assigned < minWeeklyFromDaily;
-    });
-    if (belowDailyMin.length === teacherIds.length && minWeeklyFromDaily > 0) {
-      errors.push(
-        `Global rules require at least ${minDailyBusy} classes per teacher on every working day (max ${globalConstraint.maxFreePerDay} free/day × ${activeDays.length} days = ${minWeeklyFromDaily}/week minimum). No teacher has enough assignments — lower "Max Free / Day" or assign more periods per teacher.`,
       );
     }
   }
@@ -79,10 +64,7 @@ export function analyzeScheduleFeasibility(
 
     const minWeeklyBusy = totalWeeklySlots - constraint.maxFreePerWeek;
     const maxWeeklyBusy = totalWeeklySlots - constraint.minFreePerWeek;
-    const minDailyBusy = periodsPerDay - constraint.maxFreePerDay;
-    const minWeeklyFromDaily = activeDays.length * minDailyBusy;
 
-    // Skip per-teacher weekly min if we already reported the global case for all teachers
     const globalAlreadyReported =
       globalConstraint &&
       teacherIds.every((id) => teacherWeeklyLoad(assignments, id) < minWeeklyBusy);
@@ -96,19 +78,11 @@ export function analyzeScheduleFeasibility(
         `${teacherName} is assigned ${assigned} periods/week, but rules require at least ${minWeeklyBusy} (max ${constraint.maxFreePerWeek} free/week). Lower "Max Free / Week" or assign more classes.`,
       );
     }
-
-    if (
-      assigned > 0 &&
-      assigned < minWeeklyFromDaily &&
-      !(globalConstraint && teacherIds.every((id) => teacherWeeklyLoad(assignments, id) < minWeeklyFromDaily))
-    ) {
-      errors.push(
-        `${teacherName} is assigned ${assigned} periods/week, but "Max Free / Day" of ${constraint.maxFreePerDay} requires at least ${minDailyBusy} classes on every day (${minWeeklyFromDaily}/week minimum). Lower "Max Free / Day" or assign more classes.`,
-      );
-    }
   }
 
   const sectionIds = [...new Set(assignments.map((a) => a.classSectionId))];
+  const requireFull = input.quality?.requireFullSectionWeek !== false;
+
   for (const sectionId of sectionIds) {
     const sectionName = label(labels.sections, sectionId, "Unknown section");
     const sectionLoad = assignments
@@ -119,10 +93,28 @@ export function analyzeScheduleFeasibility(
       errors.push(
         `${sectionName} needs ${sectionLoad} periods/week total, but only ${totalWeeklySlots} slots exist (${periodsPerDay} periods × ${daysPerWeek} days). Add more periods per day or reduce subject hours.`,
       );
+    } else if (requireFull && sectionLoad < totalWeeklySlots) {
+      errors.push(
+        `${sectionName} needs ${totalWeeklySlots} periods/week to fill the timetable (${periodsPerDay} periods × ${daysPerWeek} days), but assigned subjects only sum to ${sectionLoad}. Add subject hours or assign more periods per subject.`,
+      );
+    }
+
+    if (input.quality) {
+      const { maxSameSubjectPerDay } = input.quality;
+      const sectionAssignments = assignments.filter((a) => a.classSectionId === sectionId);
+      for (const a of sectionAssignments) {
+        const subjectName = label(labels.subjects, a.subjectId, "Unknown subject");
+        const minDaysNeeded = Math.ceil(a.periodsPerWeek / maxSameSubjectPerDay);
+        if (minDaysNeeded > daysPerWeek) {
+          errors.push(
+            `${sectionName} · ${subjectName}: ${a.periodsPerWeek} periods/week with max ${maxSameSubjectPerDay}/day requires ${minDaysNeeded} days, but only ${daysPerWeek} working days exist. Increase "Max Same Subject / Day" or reduce subject hours.`,
+          );
+        }
+      }
     }
   }
 
-  let totalDemand = assignments.reduce((sum, a) => sum + a.periodsPerWeek, 0);
+  const totalDemand = assignments.reduce((sum, a) => sum + a.periodsPerWeek, 0);
   const totalSupply = totalWeeklySlots * sectionIds.length;
   if (totalDemand > totalSupply) {
     errors.push(
@@ -154,7 +146,6 @@ export function formatTeacherConstraintErrors(
   input: SchedulerInput,
   labels: SchedulerLabels,
   weeklyBusy: number,
-  dailyBusy: Map<number, number>,
 ): string[] {
   const teacherName = label(labels.teachers, teacherId, "Unknown teacher");
   const constraint = getConstraint(teacherId, input.constraints);
@@ -172,21 +163,6 @@ export function formatTeacherConstraintErrors(
     errors.push(
       `${teacherName}: ${weeklyFree} free periods/week (maximum allowed: ${constraint.maxFreePerWeek}). Assigned only ${assigned} classes — lower "Max Free / Week" or assign more classes.`,
     );
-  }
-
-  for (const day of input.workingDays.slice(0, input.daysPerWeek)) {
-    const busy = dailyBusy.get(day) ?? 0;
-    const dailyFree = input.periodsPerDay - busy;
-    if (dailyFree < constraint.minFreePerDay) {
-      errors.push(
-        `${teacherName} on ${formatDayName(day)}: ${dailyFree} free periods (minimum: ${constraint.minFreePerDay}).`,
-      );
-    }
-    if (dailyFree > constraint.maxFreePerDay) {
-      errors.push(
-        `${teacherName} on ${formatDayName(day)}: ${dailyFree} free periods (maximum: ${constraint.maxFreePerDay}). Assigned ${assigned}/week — lower "Max Free / Day" or add more classes on ${formatDayName(day)}.`,
-      );
-    }
   }
 
   return errors;

@@ -3,103 +3,83 @@ import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import {
   getActiveScheduleAction,
+  getSchoolScheduleConfigAction,
   getScheduleSetupStatusAction,
   listScheduleVersionsAction,
   listPeriodTimingsAction,
 } from "@/actions/scheduler";
+import { listClassSectionsAction } from "@/actions/school-admin";
 import { listSchoolTeachersAction } from "@/actions/smart-scheduler";
 import { ScheduleControls } from "./schedule-controls";
 import { ScheduleDayView } from "./schedule-day-view";
 import { ScheduleEditPanel } from "./schedule-edit-panel";
+import { ScheduleSectionView } from "./schedule-section-view";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { schoolAdminNav } from "@/lib/nav-config";
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const dynamic = "force-dynamic";
 
-export default async function SchedulePage() {
+export default async function SchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ section?: string }>;
+}) {
   const ctx = await getSessionContext();
   if (!ctx || ctx.role !== "SCHOOL_ADMIN") redirect("/login");
 
-  const [schedule, versions, periods, readiness, teachers] = await Promise.all([
-    getActiveScheduleAction(),
-    listScheduleVersionsAction(),
-    listPeriodTimingsAction(),
-    getScheduleSetupStatusAction(),
-    listSchoolTeachersAction(),
-  ]);
+  const params = await searchParams;
 
-  const slotsByDay = new Map<number, typeof schedule extends null ? never : NonNullable<typeof schedule>["scheduleSlots"]>();
-  schedule?.scheduleSlots.forEach((slot) => {
-    const existing = slotsByDay.get(slot.dayOfWeek) ?? [];
-    existing.push(slot);
-    slotsByDay.set(slot.dayOfWeek, existing);
-  });
+  const [schedule, versions, periods, readiness, teachers, sections, scheduleConfig] =
+    await Promise.all([
+      getActiveScheduleAction(),
+      listScheduleVersionsAction(),
+      listPeriodTimingsAction(),
+      getScheduleSetupStatusAction(),
+      listSchoolTeachersAction(),
+      listClassSectionsAction(),
+      getSchoolScheduleConfigAction(),
+    ]);
+
+  const teacherMap = Object.fromEntries(teachers.map((t) => [t.id, t.name]));
+  const workingDays = scheduleConfig?.workingDays ?? [0, 1, 2, 3, 4];
+
+  const scheduleSlots = schedule?.scheduleSlots ?? [];
 
   return (
     <PortalShell title="Schedule" navItems={schoolAdminNav} userName={ctx.name}>
       <ScheduleControls periods={periods} readiness={readiness} />
-      <ScheduleDayView periods={periods} />
+      <ScheduleDayView
+        periods={periods}
+        sections={sections.map((s) => ({ id: s.id, name: s.name }))}
+        workingDays={workingDays}
+        initialSectionId={params.section}
+      />
 
       {schedule && (
         <ScheduleEditPanel slots={schedule.scheduleSlots} teachers={teachers} />
       )}
 
-      <Card className="mt-6">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <CardTitle>
-              Active Schedule
-            </CardTitle>
-            {schedule ? (
-              <Badge variant="success">v{schedule.version}</Badge>
-            ) : (
-              <Badge variant="outline">none</Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!schedule ? (
+      {schedule ? (
+        <ScheduleSectionView
+          sections={sections.map((s) => ({ id: s.id, name: s.name }))}
+          periods={periods}
+          workingDays={workingDays}
+          slots={scheduleSlots}
+          teacherMap={teacherMap}
+          initialSectionId={params.section}
+        />
+      ) : (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Class Timetable</CardTitle>
+          </CardHeader>
+          <CardContent>
             <p className="text-sm text-text-2 py-4 text-center">No schedule generated yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">Period</TableHead>
-                    {DAYS.map((d) => (
-                      <TableHead key={d}>{d}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {periods.map((p) => (
-                    <TableRow key={p.periodNo}>
-                      <TableCell className="font-medium">P{p.periodNo}</TableCell>
-                      {DAYS.map((_, day) => {
-                        const slot = slotsByDay.get(day)?.find((s) => s.periodNo === p.periodNo);
-                        return (
-                          <TableCell key={day} className="text-xs">
-                            {slot ? (
-                              <div>
-                                <p className="font-medium text-text-1">{slot.subject.name}</p>
-                                <p className="text-text-2">{slot.classSection.name}</p>
-                              </div>
-                            ) : (
-                              <span className="text-text-2">—</span>
-                            )}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mt-6">
         <CardHeader><CardTitle>Versions</CardTitle></CardHeader>

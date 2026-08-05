@@ -1,0 +1,3 @@
+ALTER TABLE "SchoolScheduleConfig" ADD COLUMN IF NOT EXISTS "maxSameSubjectPerDay" INTEGER NOT NULL DEFAULT 2;
+ALTER TABLE "SchoolScheduleConfig" ADD COLUMN IF NOT EXISTS "maxConsecutiveSameSubject" INTEGER NOT NULL DEFAULT 3;
+ALTER TABLE "SchoolScheduleConfig" ADD COLUMN IF NOT EXISTS "requireFullSectionWeek" BOOLEAN NOT NULL DEFAULT true;

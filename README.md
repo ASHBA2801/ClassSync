@@ -118,7 +118,7 @@ The timetable module follows a strict sequential setup before generation:
 4. **Teacher Assignments & Free-Period Rules** — `/admin/schedule/setup?step=4`
 5. **Review & Generate** — `/admin/schedule/setup?step=5`
 
-Generation is blocked until all readiness checks pass (`src/lib/scheduler/readiness.ts`). The solver uses CSP backtracking with MRV ordering to enforce teacher/section overlap prevention, exact weekly period counts, and per-day/per-week free-period limits.
+Generation is blocked until all readiness checks pass (`src/lib/scheduler/readiness.ts`). The solver uses CSP backtracking with MRV ordering to enforce teacher/section overlap prevention, exact weekly period counts, and weekly free-period limits (max free/week, plus an optional min free/week that defaults to 1).
 
 Setup wizard: `/admin/schedule/setup`  
 View generated timetable: `/admin/schedule`

@@ -207,6 +207,9 @@ export function GradeDetail({
                     </TableCell>
                     <TableCell>{section._count.students}</TableCell>
                     <TableCell className="text-right">
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/admin/schedule?section=${section.id}`}>Timetable</Link>
+                      </Button>
                       <EditSectionDialog section={section} onSaved={refresh} />
                       <Button
                         size="sm"

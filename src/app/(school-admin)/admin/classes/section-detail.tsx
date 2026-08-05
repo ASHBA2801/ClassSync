@@ -52,6 +52,8 @@ export function SectionDetail({
   gradeSubjects,
   assignments,
   teachers,
+  backHref,
+  backLabel,
 }: {
   gradeId: string;
   gradeName: string;
@@ -60,6 +62,8 @@ export function SectionDetail({
   gradeSubjects: GradeSubjectRow[];
   assignments: AssignmentRow[];
   teachers: TeacherRow[];
+  backHref?: string;
+  backLabel?: string;
 }) {
   const router = useRouter();
   const [savedSubjectId, setSavedSubjectId] = useState<string | null>(null);
@@ -80,6 +84,14 @@ export function SectionDetail({
 
   return (
     <div className="space-y-6">
+      {backHref && backLabel && (
+        <div>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={backHref}>← {backLabel}</Link>
+          </Button>
+        </div>
+      )}
+
       <nav className="text-sm text-text-2">
         <Link href="/admin/classes" className="text-primary hover:underline">
           Classes

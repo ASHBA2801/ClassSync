@@ -12,19 +12,11 @@ import { validateSlotConflict } from "@/lib/scheduler/solver";
 const constraintSchema = z
   .object({
     teacherId: z.string().uuid().optional(),
-    minFreePerDay: z.number().min(0),
-    maxFreePerDay: z.number().min(0),
-    minFreePerWeek: z.number().min(0),
-    maxFreePerWeek: z.number().min(0),
+    /** Set to 0 to disable the minimum free-hour requirement. Default is 1. */
+    minFreePerWeek: z.number().int().min(0),
+    maxFreePerWeek: z.number().int().min(0),
   })
   .superRefine((data, ctx) => {
-    if (data.minFreePerDay > data.maxFreePerDay) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Min free periods per day cannot exceed max",
-        path: ["minFreePerDay"],
-      });
-    }
     if (data.minFreePerWeek > data.maxFreePerWeek) {
       ctx.addIssue({
         code: "custom",
@@ -47,8 +39,6 @@ export async function upsertScheduleConstraintAction(input: z.infer<typeof const
       return tx.scheduleConstraint.update({
         where: { id: existing.id },
         data: {
-          minFreePerDay: data.minFreePerDay,
-          maxFreePerDay: data.maxFreePerDay,
           minFreePerWeek: data.minFreePerWeek,
           maxFreePerWeek: data.maxFreePerWeek,
         },
@@ -59,8 +49,6 @@ export async function upsertScheduleConstraintAction(input: z.infer<typeof const
       data: {
         schoolId: ctx.schoolId,
         teacherId: data.teacherId ?? null,
-        minFreePerDay: data.minFreePerDay,
-        maxFreePerDay: data.maxFreePerDay,
         minFreePerWeek: data.minFreePerWeek,
         maxFreePerWeek: data.maxFreePerWeek,
       },
@@ -374,6 +362,9 @@ export async function getSchoolScheduleConfigAction() {
 const scheduleConfigSchema = z.object({
   daysPerWeek: z.number().min(1).max(7),
   workingDays: z.array(z.number().min(0).max(6)),
+  maxSameSubjectPerDay: z.number().int().min(1).max(8).optional(),
+  maxConsecutiveSameSubject: z.number().int().min(1).max(8).optional(),
+  requireFullSectionWeek: z.boolean().optional(),
 });
 
 export async function upsertSchoolScheduleConfigAction(input: z.infer<typeof scheduleConfigSchema>) {
@@ -383,8 +374,27 @@ export async function upsertSchoolScheduleConfigAction(input: z.infer<typeof sch
   return withTenantContext(ctx.schoolId, async (tx) => {
     return tx.schoolScheduleConfig.upsert({
       where: { schoolId: ctx.schoolId },
-      create: { schoolId: ctx.schoolId, ...data },
-      update: data,
+      create: {
+        schoolId: ctx.schoolId,
+        daysPerWeek: data.daysPerWeek,
+        workingDays: data.workingDays,
+        maxSameSubjectPerDay: data.maxSameSubjectPerDay ?? 2,
+        maxConsecutiveSameSubject: data.maxConsecutiveSameSubject ?? 3,
+        requireFullSectionWeek: data.requireFullSectionWeek ?? true,
+      },
+      update: {
+        daysPerWeek: data.daysPerWeek,
+        workingDays: data.workingDays,
+        ...(data.maxSameSubjectPerDay !== undefined && {
+          maxSameSubjectPerDay: data.maxSameSubjectPerDay,
+        }),
+        ...(data.maxConsecutiveSameSubject !== undefined && {
+          maxConsecutiveSameSubject: data.maxConsecutiveSameSubject,
+        }),
+        ...(data.requireFullSectionWeek !== undefined && {
+          requireFullSectionWeek: data.requireFullSectionWeek,
+        }),
+      },
     });
   });
 }

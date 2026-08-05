@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:verify-schedule": "tsx prisma/verify-schedule.ts",
     "db:rls": "prisma db execute --file prisma/migrations/rls/001_enable_rls.sql",
     "worker": "tsx src/workers/index.ts",
     "test": "vitest run",

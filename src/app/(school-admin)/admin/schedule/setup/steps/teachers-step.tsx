@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -33,8 +34,6 @@ import type { ScheduleReadiness } from "@/lib/scheduler/readiness";
 interface ConstraintRow {
   id: string;
   teacherId: string | null;
-  minFreePerDay: number;
-  maxFreePerDay: number;
   minFreePerWeek: number;
   maxFreePerWeek: number;
 }
@@ -53,6 +52,10 @@ interface SectionRow {
   assignments: Array<{ subjectId: string; teacher: { id: string; name: string } }>;
 }
 
+function formatMinFree(min: number): string {
+  return min <= 0 ? "Off" : String(min);
+}
+
 export function TeachersStep({
   readiness,
   constraints,
@@ -67,18 +70,29 @@ export function TeachersStep({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const globalConstraint = constraints.find((c) => c.teacherId === null);
+  const teacherOverrides = constraints.filter((c) => c.teacherId !== null);
+
+  const [requireMinFree, setRequireMinFree] = useState(
+    (globalConstraint?.minFreePerWeek ?? 1) > 0,
+  );
+  const [minFreePerWeek, setMinFreePerWeek] = useState(
+    String(Math.max(globalConstraint?.minFreePerWeek ?? 1, 1)),
+  );
+  const [maxFreePerWeek, setMaxFreePerWeek] = useState(
+    String(globalConstraint?.maxFreePerWeek ?? 10),
+  );
+
   const [overrideForm, setOverrideForm] = useState({
     teacherId: "",
-    minFreePerDay: "0",
-    maxFreePerDay: "3",
+    requireMinFree: true,
     minFreePerWeek: "1",
     maxFreePerWeek: "10",
   });
 
   const assignmentsCheck = readiness.checks.find((c) => c.step === "assignments");
   const constraintsCheck = readiness.checks.find((c) => c.step === "constraints");
-  const globalConstraint = constraints.find((c) => c.teacherId === null);
-  const teacherOverrides = constraints.filter((c) => c.teacherId !== null);
 
   const assignedTeacherIds = new Set(
     sections.flatMap((s) => s.assignments.map((a) => a.teacher.id)),
@@ -93,8 +107,8 @@ export function TeachersStep({
       <div>
         <h2 className="text-lg font-semibold">Teachers & Free-Time Rules</h2>
         <p className="text-sm text-text-2 mt-1">
-          Assign teachers to every subject-section pair and configure global and per-teacher
-          free-period limits.
+          Assign teachers to every subject-section pair and configure weekly free-period limits.
+          Teachers get at least 1 free hour per week by default — turn that off or change it below.
         </p>
       </div>
 
@@ -170,7 +184,7 @@ export function TeachersStep({
                     <TableCell className="text-right">
                       <Button variant="outline" size="sm" asChild>
                         <Link
-                          href={`/admin/classes/${section.gradeId}/sections/${section.id}`}
+                          href={`/admin/classes/${section.gradeId}/sections/${section.id}?from=schedule-setup`}
                         >
                           Assign
                         </Link>
@@ -195,13 +209,10 @@ export function TeachersStep({
                 e.preventDefault();
                 setError(null);
                 setSaved(false);
-                const fd = new FormData(e.currentTarget);
                 try {
                   await upsertScheduleConstraintAction({
-                    minFreePerDay: Number(fd.get("minFreePerDay")),
-                    maxFreePerDay: Number(fd.get("maxFreePerDay")),
-                    minFreePerWeek: Number(fd.get("minFreePerWeek")),
-                    maxFreePerWeek: Number(fd.get("maxFreePerWeek")),
+                    minFreePerWeek: requireMinFree ? Number(minFreePerWeek) : 0,
+                    maxFreePerWeek: Number(maxFreePerWeek),
                   });
                   setSaved(true);
                   await refresh();
@@ -209,50 +220,49 @@ export function TeachersStep({
                   setError(err instanceof Error ? err.message : "Failed to save constraints");
                 }
               }}
-              className="space-y-3"
+              className="space-y-4"
             >
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Max Free / Week</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={maxFreePerWeek}
+                  onChange={(e) => setMaxFreePerWeek(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-text-2 mt-1">
+                  Upper limit on free periods a teacher may have each week.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                 <div>
-                  <Label>Min Free / Day</Label>
-                  <Input
-                    name="minFreePerDay"
-                    type="number"
-                    min={0}
-                    defaultValue={globalConstraint?.minFreePerDay ?? 0}
-                    required
-                  />
+                  <Label htmlFor="require-min-free">Require minimum free hours</Label>
+                  <p className="text-xs text-text-2 mt-0.5">
+                    Defaults to at least 1 free hour per week.
+                  </p>
                 </div>
-                <div>
-                  <Label>Max Free / Day</Label>
-                  <Input
-                    name="maxFreePerDay"
-                    type="number"
-                    min={0}
-                    defaultValue={globalConstraint?.maxFreePerDay ?? 3}
-                    required
-                  />
-                </div>
+                <Switch
+                  id="require-min-free"
+                  checked={requireMinFree}
+                  onCheckedChange={setRequireMinFree}
+                />
+              </div>
+
+              {requireMinFree && (
                 <div>
                   <Label>Min Free / Week</Label>
                   <Input
-                    name="minFreePerWeek"
                     type="number"
-                    min={0}
-                    defaultValue={globalConstraint?.minFreePerWeek ?? 1}
+                    min={1}
+                    value={minFreePerWeek}
+                    onChange={(e) => setMinFreePerWeek(e.target.value)}
                     required
                   />
                 </div>
-                <div>
-                  <Label>Max Free / Week</Label>
-                  <Input
-                    name="maxFreePerWeek"
-                    type="number"
-                    min={0}
-                    defaultValue={globalConstraint?.maxFreePerWeek ?? 10}
-                    required
-                  />
-                </div>
-              </div>
+              )}
+
               <Button type="submit" size="sm">
                 Save Global Rules
               </Button>
@@ -277,15 +287,14 @@ export function TeachersStep({
                 try {
                   await upsertScheduleConstraintAction({
                     teacherId: overrideForm.teacherId,
-                    minFreePerDay: Number(overrideForm.minFreePerDay),
-                    maxFreePerDay: Number(overrideForm.maxFreePerDay),
-                    minFreePerWeek: Number(overrideForm.minFreePerWeek),
+                    minFreePerWeek: overrideForm.requireMinFree
+                      ? Number(overrideForm.minFreePerWeek)
+                      : 0,
                     maxFreePerWeek: Number(overrideForm.maxFreePerWeek),
                   });
                   setOverrideForm({
                     teacherId: "",
-                    minFreePerDay: "0",
-                    maxFreePerDay: "3",
+                    requireMinFree: true,
                     minFreePerWeek: "1",
                     maxFreePerWeek: "10",
                   });
@@ -316,56 +325,44 @@ export function TeachersStep({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Min Free / Day</Label>
-                  <Input
-                    name="overrideMinDay"
-                    type="number"
-                    min={0}
-                    value={overrideForm.minFreePerDay}
-                    onChange={(e) =>
-                      setOverrideForm((prev) => ({ ...prev, minFreePerDay: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Max Free / Day</Label>
-                  <Input
-                    name="overrideMaxDay"
-                    type="number"
-                    min={0}
-                    value={overrideForm.maxFreePerDay}
-                    onChange={(e) =>
-                      setOverrideForm((prev) => ({ ...prev, maxFreePerDay: e.target.value }))
-                    }
-                  />
-                </div>
+
+              <div>
+                <Label>Max Free / Week</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={overrideForm.maxFreePerWeek}
+                  onChange={(e) =>
+                    setOverrideForm((prev) => ({ ...prev, maxFreePerWeek: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                <Label htmlFor="override-require-min">Require minimum free hours</Label>
+                <Switch
+                  id="override-require-min"
+                  checked={overrideForm.requireMinFree}
+                  onCheckedChange={(checked) =>
+                    setOverrideForm((prev) => ({ ...prev, requireMinFree: checked }))
+                  }
+                />
+              </div>
+
+              {overrideForm.requireMinFree && (
                 <div>
                   <Label>Min Free / Week</Label>
                   <Input
-                    name="overrideMinWeek"
                     type="number"
-                    min={0}
+                    min={1}
                     value={overrideForm.minFreePerWeek}
                     onChange={(e) =>
                       setOverrideForm((prev) => ({ ...prev, minFreePerWeek: e.target.value }))
                     }
                   />
                 </div>
-                <div>
-                  <Label>Max Free / Week</Label>
-                  <Input
-                    name="overrideMaxWeek"
-                    type="number"
-                    min={0}
-                    value={overrideForm.maxFreePerWeek}
-                    onChange={(e) =>
-                      setOverrideForm((prev) => ({ ...prev, maxFreePerWeek: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
+              )}
+
               <Button type="submit" size="sm" variant="outline">
                 Add Override
               </Button>
@@ -382,9 +379,9 @@ export function TeachersStep({
                       className="flex items-center justify-between text-sm border rounded-lg px-3 py-2"
                     >
                       <span>
-                        {teacher?.name ?? override.teacherId}: day [{override.minFreePerDay}-
-                        {override.maxFreePerDay}], week [{override.minFreePerWeek}-
-                        {override.maxFreePerWeek}]
+                        {teacher?.name ?? override.teacherId}: min{" "}
+                        {formatMinFree(override.minFreePerWeek)}, max {override.maxFreePerWeek}
+                        /week
                       </span>
                       <Button
                         variant="ghost"
@@ -416,8 +413,8 @@ export function TeachersStep({
               <TableHeader>
                 <TableRow>
                   <TableHead>Teacher</TableHead>
-                  <TableHead>Min/Max Free (Day)</TableHead>
-                  <TableHead>Min/Max Free (Week)</TableHead>
+                  <TableHead>Min Free / Week</TableHead>
+                  <TableHead>Max Free / Week</TableHead>
                   <TableHead>Source</TableHead>
                 </TableRow>
               </TableHeader>
@@ -430,11 +427,9 @@ export function TeachersStep({
                     <TableRow key={teacherId}>
                       <TableCell>{teacher?.name ?? teacherId}</TableCell>
                       <TableCell>
-                        {effective?.minFreePerDay}–{effective?.maxFreePerDay}
+                        {effective ? formatMinFree(effective.minFreePerWeek) : "—"}
                       </TableCell>
-                      <TableCell>
-                        {effective?.minFreePerWeek}–{effective?.maxFreePerWeek}
-                      </TableCell>
+                      <TableCell>{effective?.maxFreePerWeek ?? "—"}</TableCell>
                       <TableCell>
                         <Badge variant={hasOverride ? "default" : "outline"}>
                           {hasOverride ? "Override" : "Global"}
