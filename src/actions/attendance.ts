@@ -10,6 +10,7 @@ import { checkRateLimit, isDuplicate } from "@/lib/rate-limit";
 import { enqueueNotification } from "@/lib/notifications";
 import { createAuditLog } from "@/lib/audit";
 import { notifyLinkedGuardians } from "@/lib/notifications";
+import { getFaceRecognitionProvider } from "@/lib/face/FaceRecognitionProvider";
 
 const RETRY_WINDOW_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 3;
@@ -312,9 +313,13 @@ export async function listTeacherAttendanceRecordsAction(startDate?: string, end
   });
 }
 
-export async function enrollFaceAction(_imageBase64: string) {
+export async function enrollFaceAction(imageBase64: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.ATTENDANCE_MARK);
   const key = `face/${ctx.userId}/enrolled.jpg`;
+
+  const provider = getFaceRecognitionProvider();
+  const buffer = Buffer.from(imageBase64, "base64");
+  await provider.enrollFace(ctx.userId, buffer);
 
   await prisma.user.update({
     where: { id: ctx.userId },

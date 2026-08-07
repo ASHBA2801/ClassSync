@@ -27,9 +27,13 @@ export class MockFaceRecognitionProvider implements FaceRecognitionProvider {
   }
 }
 
+import { CompreFaceProvider } from "./compre-face";
 import { AwsRekognitionProvider } from "./aws-rekognition";
 
 export function getFaceRecognitionProvider(): FaceRecognitionProvider {
+  if (process.env.COMPREFACE_API_KEY) {
+    return new CompreFaceProvider();
+  }
   if (process.env.AWS_ACCESS_KEY_ID) {
     return new AwsRekognitionProvider();
   }
