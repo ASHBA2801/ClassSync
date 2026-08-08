@@ -11,9 +11,10 @@ import { checkRateLimit, isDuplicate } from "@/lib/rate-limit";
 import { enqueueNotification } from "@/lib/notifications";
 import { createAuditLog } from "@/lib/audit";
 import { notifyLinkedGuardians } from "@/lib/notifications";
-
-const RETRY_WINDOW_MS = 5 * 60 * 1000;
-const MAX_ATTEMPTS = 3;
+import {
+  ATTENDANCE_MAX_ATTEMPTS,
+  getNextAttemptNumber,
+} from "@/lib/attendance/face-attendance";
 
 const submitAttendanceSchema = z.object({
   geoLat: z.number(),
@@ -72,14 +73,7 @@ export async function submitTeacherAttendanceAction(input: z.infer<typeof submit
 
   const recentAttempts = attendance?.attempts ?? [];
   const lastAttempt = recentAttempts[0];
-  let attemptNumber = (lastAttempt?.attemptNumber ?? 0) + 1;
-
-  if (lastAttempt && !lastAttempt.success) {
-    const elapsed = Date.now() - lastAttempt.createdAt.getTime();
-    if (elapsed > RETRY_WINDOW_MS) {
-      attemptNumber = 1;
-    }
-  }
+  const attemptNumber = getNextAttemptNumber(lastAttempt);
 
   if (!attendance) {
     attendance = await prisma.teacherAttendance.create({
@@ -109,7 +103,7 @@ export async function submitTeacherAttendanceAction(input: z.infer<typeof submit
     },
   });
 
-  if (attemptNumber >= MAX_ATTEMPTS && data.imageBase64) {
+  if (attemptNumber >= ATTENDANCE_MAX_ATTEMPTS && data.imageBase64) {
     const evidenceKey = `attendance/evidence/${ctx.userId}/${Date.now()}.jpg`;
     await prisma.attendanceAttempt.update({
       where: { id: attempt.id },
@@ -142,9 +136,10 @@ export async function submitTeacherAttendanceAction(input: z.infer<typeof submit
   await queue.add(
     "verify",
     {
+      type: "teacher",
       attendanceId: attendance.id,
       attemptId: attempt.id,
-      teacherId: ctx.userId,
+      userId: ctx.userId,
       schoolId: ctx.schoolId,
       attemptNumber,
       imageBase64: data.imageBase64,
@@ -268,6 +263,7 @@ const leaveSchema = z.object({
   startDate: z.string(),
   endDate: z.string(),
   reason: z.string().min(3),
+  leaveType: z.enum(["REGULAR", "OD"]).default("REGULAR"),
 });
 
 export async function submitTeacherLeaveAction(input: z.infer<typeof leaveSchema>) {
@@ -283,6 +279,7 @@ export async function submitTeacherLeaveAction(input: z.infer<typeof leaveSchema
         startDate: new Date(data.startDate),
         endDate: new Date(data.endDate),
         reason: data.reason,
+        leaveType: data.leaveType,
       },
     });
   });
@@ -293,6 +290,35 @@ export async function listTeacherLeaveRequestsAction() {
   return withTenantContext(ctx.schoolId, async (tx) => {
     return tx.leaveRequest.findMany({
       where: { requesterId: ctx.userId, requesterType: "TEACHER" },
+      orderBy: { createdAt: "desc" },
+    });
+  });
+}
+
+export async function submitStaffLeaveAction(input: z.infer<typeof leaveSchema>) {
+  const ctx = await requireSchoolPermission(PERMISSIONS.LEAVE_REQUEST);
+  const data = leaveSchema.parse(input);
+
+  return withTenantContext(ctx.schoolId, async (tx) => {
+    return tx.leaveRequest.create({
+      data: {
+        schoolId: ctx.schoolId,
+        requesterId: ctx.userId,
+        requesterType: "STAFF",
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
+        reason: data.reason,
+        leaveType: data.leaveType,
+      },
+    });
+  });
+}
+
+export async function listStaffLeaveRequestsAction() {
+  const ctx = await requireSchoolContext();
+  return withTenantContext(ctx.schoolId, async (tx) => {
+    return tx.leaveRequest.findMany({
+      where: { requesterId: ctx.userId, requesterType: "STAFF" },
       orderBy: { createdAt: "desc" },
     });
   });
@@ -315,7 +341,7 @@ export async function listEscalatedAttendanceAction() {
 
 export async function overrideAttendanceAction(
   attendanceId: string,
-  status: "PRESENT" | "FAILED",
+  status: "PRESENT" | "FAILED" | "ABSENT",
   note?: string,
 ) {
   const ctx = await requireSchoolPermission(PERMISSIONS.ATTENDANCE_OVERRIDE);
@@ -324,7 +350,7 @@ export async function overrideAttendanceAction(
     return tx.teacherAttendance.update({
       where: { id: attendanceId, schoolId: ctx.schoolId },
       data: {
-        status: status === "PRESENT" ? "PRESENT" : "FAILED",
+        status,
         markedAt: status === "PRESENT" ? new Date() : undefined,
         method: "manual_override",
       },

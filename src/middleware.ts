@@ -7,6 +7,7 @@ const roleRoutes: Record<string, string[]> = {
   SYSTEM_ADMIN: ["/system"],
   SCHOOL_ADMIN: ["/admin"],
   TEACHER: ["/teacher"],
+  STAFF: ["/staff"],
   PARENT: ["/parent"],
 };
 
@@ -34,6 +35,7 @@ export default auth((req) => {
       SYSTEM_ADMIN: "/system",
       SCHOOL_ADMIN: "/admin",
       TEACHER: "/teacher",
+      STAFF: "/staff",
       PARENT: "/parent",
     };
     return NextResponse.redirect(new URL(dashboardMap[role] ?? "/login", req.url));

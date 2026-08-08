@@ -15,6 +15,21 @@ export const DEMO_ACCOUNTS = [
     password: "teacher123",
   },
   {
+    role: "Staff (Driver)",
+    email: "driver@demo.com",
+    password: "staff123",
+  },
+  {
+    role: "Staff (Security)",
+    email: "security@demo.com",
+    password: "staff123",
+  },
+  {
+    role: "Staff (Cleaner)",
+    email: "cleaner@demo.com",
+    password: "staff123",
+  },
+  {
     role: "Parent",
     email: "parent@demo.com",
     password: "parent123",

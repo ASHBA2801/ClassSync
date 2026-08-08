@@ -6,25 +6,39 @@ import {
   AlertCircle,
   ArrowRight,
   Building2,
+  Bus,
   ChevronRight,
   GraduationCap,
   Lock,
   Mail,
   Shield,
+  ShieldCheck,
+  Sparkles,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { credentialsSignInAction } from "@/actions/auth";
 import { PasswordInput } from "@/components/ui/password-input";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
 import styles from "./login.module.css";
 
-const DEMO_ICONS = [Shield, Building2, GraduationCap, Users] as const;
 const DEMO_ICON_CLASSES = [
   styles.demoIconPurple,
   styles.demoIconBlue,
   styles.demoIconTeal,
   styles.demoIconPink,
 ] as const;
+
+function getDemoIcon(role: string): LucideIcon {
+  if (role.includes("System Admin")) return Shield;
+  if (role.includes("School Admin")) return Building2;
+  if (role === "Teacher") return GraduationCap;
+  if (role.includes("Driver")) return Bus;
+  if (role.includes("Security")) return ShieldCheck;
+  if (role.includes("Cleaner")) return Sparkles;
+  if (role === "Parent") return Users;
+  return Users;
+}
 
 function authErrorMessage(code: string | null): string | null {
   if (!code) return null;
@@ -147,7 +161,7 @@ export function LoginForm() {
 
         <ul className={styles.demoList}>
           {DEMO_ACCOUNTS.map((account, i) => {
-            const Icon = DEMO_ICONS[i];
+            const Icon = getDemoIcon(account.role);
             return (
               <li key={account.email}>
                 <button
@@ -156,7 +170,7 @@ export function LoginForm() {
                   onClick={() => login(account.email, account.password)}
                   className={styles.demoBtn}
                 >
-                  <div className={`${styles.demoIcon} ${DEMO_ICON_CLASSES[i]}`}>
+                  <div className={`${styles.demoIcon} ${DEMO_ICON_CLASSES[i % DEMO_ICON_CLASSES.length]}`}>
                     <Icon className={styles.demoIconSvg} />
                   </div>
                   <div className={styles.demoText}>

@@ -119,6 +119,68 @@ async function main() {
       create: { userId: user.id, schoolId: school.id, role: "TEACHER" },
       update: {},
     });
+
+    await prisma.employee.upsert({
+      where: { schoolId_userId: { schoolId: school.id, userId: user.id } },
+      create: {
+        schoolId: school.id,
+        userId: user.id,
+        employeeCode: `TCH-${t.email.split("@")[0].toUpperCase()}`,
+        jobType: t.email === "teacher5@demo.com" ? "PET_MASTER" : "TEACHER",
+        dateOfJoining: new Date("2024-04-01"),
+      },
+      update: {},
+    });
+  }
+
+  const demoStaff = [
+    { email: "driver@demo.com", name: "Demo Van Driver", code: "DRV-001", jobType: "VAN_DRIVER" as const },
+    { email: "security@demo.com", name: "Demo Security Guard", code: "SEC-001", jobType: "SECURITY_GUARD" as const },
+    { email: "cleaner@demo.com", name: "Demo Cleaner", code: "CLN-001", jobType: "CLEANER" as const },
+  ];
+
+  for (const staff of demoStaff) {
+    const user = await prisma.user.upsert({
+      where: { email: staff.email },
+      create: {
+        email: staff.email,
+        name: staff.name,
+        passwordHash: await hash("staff123", 12),
+      },
+      update: { name: staff.name },
+    });
+
+    await prisma.userSchoolMembership.upsert({
+      where: { userId_schoolId: { userId: user.id, schoolId: school.id } },
+      create: { userId: user.id, schoolId: school.id, role: "STAFF" },
+      update: { role: "STAFF", isActive: true },
+    });
+
+    await prisma.employee.upsert({
+      where: { schoolId_userId: { schoolId: school.id, userId: user.id } },
+      create: {
+        schoolId: school.id,
+        userId: user.id,
+        employeeCode: staff.code,
+        jobType: staff.jobType,
+        dateOfJoining: new Date("2024-06-01"),
+      },
+      update: { jobType: staff.jobType },
+    });
+  }
+
+  const existingRoute = await prisma.transportRoute.findFirst({
+    where: { schoolId: school.id, name: "Route A - North" },
+  });
+  if (!existingRoute) {
+    await prisma.transportRoute.create({
+      data: {
+        schoolId: school.id,
+        name: "Route A - North",
+        description: "Covers northern residential areas",
+        vehicleNo: "KA-01-AB-1234",
+      },
+    });
   }
 
   await prisma.userSchoolMembership.upsert({

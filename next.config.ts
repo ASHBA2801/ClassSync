@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  // Keep Turbopack rooted at this app so it resolves `next` correctly on Windows
+  // paths (including directories with spaces).
+  turbopack: {
+    root: projectRoot,
+  },
   redirects: async () => [
     {
       source: "/parent/fees/payment-success",

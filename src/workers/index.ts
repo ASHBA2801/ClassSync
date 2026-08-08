@@ -6,28 +6,81 @@ import { sendNotification, NotificationPayload } from "../lib/notifications";
 import { generateScheduleForSchool } from "../lib/scheduler/generate";
 import { enqueueNotification } from "../lib/notifications";
 import { resolveEffectiveSlots, dateToDayOfWeek, startOfDay } from "../lib/scheduler/smart-scheduler";
+import { processPayrollJobs } from "../lib/payroll/process-jobs";
+import { schedulePayrollJobs } from "../lib/queue/queues";
 
 interface FaceVerificationJob {
+  type?: "teacher" | "staff";
   attendanceId: string;
   attemptId: string;
-  teacherId: string;
+  userId: string;
+  teacherId?: string;
   schoolId: string;
   attemptNumber: number;
   imageBase64?: string;
 }
 
 async function processFaceVerification(job: Job<FaceVerificationJob>) {
-  const { attendanceId, attemptId, teacherId, attemptNumber, imageBase64 } = job.data;
+  const {
+    attendanceId,
+    attemptId,
+    attemptNumber,
+    imageBase64,
+    schoolId,
+  } = job.data;
+  const userId = job.data.userId ?? job.data.teacherId;
+  const type = job.data.type ?? "teacher";
 
   const provider = getFaceRecognitionProvider();
   let matched = false;
   let confidence = 0;
 
-  if (imageBase64) {
+  if (imageBase64 && userId) {
     const buffer = Buffer.from(imageBase64, "base64");
-    const result = await provider.verifyFace(teacherId, buffer);
+    const result = await provider.verifyFace(userId, buffer);
     matched = result.matched;
     confidence = result.confidence;
+  }
+
+  if (type === "staff") {
+    await prisma.staffAttendanceAttempt.update({
+      where: { id: attemptId },
+      data: {
+        success: matched,
+        errorMessage: matched ? null : `Face match failed (confidence: ${confidence})`,
+      },
+    });
+
+    if (matched) {
+      const now = new Date();
+      await prisma.staffAttendance.update({
+        where: { id: attendanceId },
+        data: {
+          status: "PRESENT",
+          markedAt: now,
+          checkInAt: now,
+          method: "face_recognition",
+        },
+      });
+      return { matched: true };
+    }
+
+    await prisma.staffAttendance.update({
+      where: { id: attendanceId },
+      data: { status: "FAILED" },
+    });
+
+    if (userId && attemptNumber < 3) {
+      await enqueueNotification({
+        schoolId,
+        userId,
+        title: "Attendance Failed",
+        body: "Attendance failed, please retry within 5 minutes.",
+        metadata: { attendanceId, attemptNumber },
+      });
+    }
+
+    return { matched: false, attemptNumber };
   }
 
   await prisma.attendanceAttempt.update({
@@ -55,10 +108,10 @@ async function processFaceVerification(job: Job<FaceVerificationJob>) {
     data: { status: "FAILED" },
   });
 
-  if (attemptNumber < 3) {
+  if (userId && attemptNumber < 3) {
     await enqueueNotification({
-      schoolId: job.data.schoolId,
-      userId: teacherId,
+      schoolId,
+      userId,
       title: "Attendance Failed",
       body: "Attendance failed, please retry within 5 minutes.",
       metadata: { attendanceId, attemptNumber },
@@ -143,6 +196,10 @@ async function processScheduleReminders() {
   }
 }
 
+async function processPayrollJob() {
+  await processPayrollJobs(new Date());
+}
+
 export function startWorkers() {
   const connection = getRedis();
 
@@ -150,6 +207,11 @@ export function startWorkers() {
   new Worker(QUEUE_NAMES.NOTIFICATIONS, processNotification, { connection });
   new Worker(QUEUE_NAMES.SCHEDULER, processScheduler, { connection });
   new Worker(QUEUE_NAMES.SCHEDULE_REMINDERS, processScheduleReminders, { connection });
+  new Worker(QUEUE_NAMES.PAYROLL_JOBS, processPayrollJob, { connection });
+
+  schedulePayrollJobs().catch((err) => {
+    console.error("[payroll] Failed to schedule daily payroll jobs:", err);
+  });
 
   console.log("BullMQ workers started");
 }

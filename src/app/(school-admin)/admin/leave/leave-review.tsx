@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 interface Request {
   id: string;
   requesterType: string;
+  leaveType: string;
   reason: string;
   startDate: Date;
   endDate: Date;
@@ -49,7 +50,8 @@ export function LeaveReviewList({ requests }: { requests: Request[] }) {
           <TableHeader>
             <TableRow>
               <TableHead>Requester</TableHead>
-              <TableHead>Type</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Leave</TableHead>
               <TableHead>Student</TableHead>
               <TableHead>Dates</TableHead>
               <TableHead>Reason</TableHead>
@@ -64,6 +66,11 @@ export function LeaveReviewList({ requests }: { requests: Request[] }) {
                 <TableCell className="font-medium">{r.requester.name}</TableCell>
                 <TableCell>
                   <Badge variant="outline" hideIcon>{r.requesterType}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={r.leaveType === "OD" ? "success" : "outline"} hideIcon>
+                    {r.leaveType === "OD" ? "OD" : "Regular"}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-text-2">{r.student?.name ?? "Self"}</TableCell>
                 <TableCell className="text-xs text-text-2 whitespace-nowrap">

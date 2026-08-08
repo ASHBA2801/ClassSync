@@ -21,7 +21,7 @@ export const PAYMENT_PROVIDER_META: Record<
   RAZORPAY: {
     label: "Razorpay",
     webhookPath: (schoolId) => `/api/webhooks/razorpay/${schoolId}`,
-    description: "Popular Indian payment gateway with UPI, cards, and net banking.",
+    description: "Indian payments (UPI, cards, net banking). Use rzp_test_* keys for test mode.",
   },
   PHONEPE: {
     label: "PhonePe",

@@ -310,17 +310,8 @@ describe("encryption", () => {
 });
 
 describe("attendance retry state machine", () => {
-  const RETRY_WINDOW_MS = 5 * 60 * 1000;
-  const MAX_ATTEMPTS = 3;
-
-  function getNextAttemptNumber(
-    lastAttempt: { attemptNumber: number; success: boolean; createdAt: Date } | undefined,
-  ): number {
-    if (!lastAttempt || lastAttempt.success) return 1;
-    const elapsed = Date.now() - lastAttempt.createdAt.getTime();
-    if (elapsed > RETRY_WINDOW_MS) return 1;
-    return lastAttempt.attemptNumber + 1;
-  }
+  const { getNextAttemptNumber, ATTENDANCE_RETRY_WINDOW_MS, ATTENDANCE_MAX_ATTEMPTS } =
+    require("@/lib/attendance/face-attendance");
 
   it("increments attempt within window", () => {
     const last = { attemptNumber: 1, success: false, createdAt: new Date() };
@@ -331,13 +322,13 @@ describe("attendance retry state machine", () => {
     const last = {
       attemptNumber: 2,
       success: false,
-      createdAt: new Date(Date.now() - RETRY_WINDOW_MS - 1000),
+      createdAt: new Date(Date.now() - ATTENDANCE_RETRY_WINDOW_MS - 1000),
     };
     expect(getNextAttemptNumber(last)).toBe(1);
   });
 
   it("escalates on third attempt", () => {
     const attemptNumber = 3;
-    expect(attemptNumber >= MAX_ATTEMPTS).toBe(true);
+    expect(attemptNumber >= ATTENDANCE_MAX_ATTEMPTS).toBe(true);
   });
 });

@@ -11,7 +11,10 @@ DECLARE
     'ScheduleConstraint', 'SchoolScheduleConfig', 'ScheduleAlteration', 'ScheduleSwapGroup',
     'TeacherAlterationStat', 'TeacherAttendance', 'StudentAttendance',
     'LeaveRequest', 'Document', 'FeeStructure', 'FeeInvoice', 'Payment',
-    'NotificationLog', 'PushSubscription', 'AIServiceKey'
+    'NotificationLog', 'PushSubscription', 'AIServiceKey',
+    'Employee', 'EmployeeSalary', 'EmployeeBankAccount', 'PayrollRun', 'SalaryPayout',
+    'SchoolEmployeeJobTypeConfig', 'SchoolCalendarDay', 'TransportRoute', 'SecurityVisitorLog',
+    'CleanerZoneAssignment', 'SportsSchedule', 'LibraryBook', 'StaffAttendance'
   ];
 BEGIN
   FOREACH tbl IN ARRAY tables
@@ -52,7 +55,38 @@ CREATE POLICY payment_config_isolation ON "SchoolPaymentProviderConfig" USING (
   OR "schoolId" = NULLIF(current_setting('app.current_school_id', true), '')::uuid
 );
 
--- AttendanceAttempt via parent join (no direct school_id)
+-- SchoolPayoutConfig RLS
+ALTER TABLE "SchoolPayoutConfig" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS payout_config_isolation ON "SchoolPayoutConfig";
+CREATE POLICY payout_config_isolation ON "SchoolPayoutConfig" USING (
+  current_setting('app.bypass_rls', true) = 'true'
+  OR "schoolId" = NULLIF(current_setting('app.current_school_id', true), '')::uuid
+);
+
+-- TransportRouteAssignment via employee school
+ALTER TABLE "TransportRouteAssignment" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS route_assignment_isolation ON "TransportRouteAssignment";
+CREATE POLICY route_assignment_isolation ON "TransportRouteAssignment" USING (
+  current_setting('app.bypass_rls', true) = 'true'
+  OR EXISTS (
+    SELECT 1 FROM "Employee" e
+    WHERE e.id = "TransportRouteAssignment"."employeeId"
+    AND e."schoolId" = NULLIF(current_setting('app.current_school_id', true), '')::uuid
+  )
+);
+
+-- LibraryIssue via book school
+ALTER TABLE "LibraryIssue" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS library_issue_isolation ON "LibraryIssue";
+CREATE POLICY library_issue_isolation ON "LibraryIssue" USING (
+  current_setting('app.bypass_rls', true) = 'true'
+  OR EXISTS (
+    SELECT 1 FROM "LibraryBook" b
+    WHERE b.id = "LibraryIssue"."bookId"
+    AND b."schoolId" = NULLIF(current_setting('app.current_school_id', true), '')::uuid
+  )
+);
+
 ALTER TABLE "AttendanceAttempt" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS attempt_isolation ON "AttendanceAttempt";
 CREATE POLICY attempt_isolation ON "AttendanceAttempt" USING (
@@ -61,5 +95,16 @@ CREATE POLICY attempt_isolation ON "AttendanceAttempt" USING (
     SELECT 1 FROM "TeacherAttendance" ta
     WHERE ta.id = "AttendanceAttempt"."teacherAttendanceId"
     AND ta."schoolId" = NULLIF(current_setting('app.current_school_id', true), '')::uuid
+  )
+);
+
+ALTER TABLE "StaffAttendanceAttempt" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS staff_attempt_isolation ON "StaffAttendanceAttempt";
+CREATE POLICY staff_attempt_isolation ON "StaffAttendanceAttempt" USING (
+  current_setting('app.bypass_rls', true) = 'true'
+  OR EXISTS (
+    SELECT 1 FROM "StaffAttendance" sa
+    WHERE sa.id = "StaffAttendanceAttempt"."staffAttendanceId"
+    AND sa."schoolId" = NULLIF(current_setting('app.current_school_id', true), '')::uuid
   )
 );

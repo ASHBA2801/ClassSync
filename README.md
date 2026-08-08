@@ -136,5 +136,7 @@ src/
 prisma/
 ├── schema.prisma
 ├── seed.ts
-└── migrations/rls/
+├── migrations/          # Prisma migrate history (init baseline)
+├── migrations_archive/  # Superseded incremental migrations
+└── rls/                 # Row-level security policies (run via npm run db:rls)
 ```

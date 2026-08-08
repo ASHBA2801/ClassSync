@@ -17,13 +17,17 @@ export async function getSessionContext(): Promise<SessionContext | null> {
   const session = await auth();
   if (!session?.user) return null;
 
+  const role = session.user.role as Role;
+  // Refresh from DB on the server (Node runtime) — avoids stale JWT permissions
+  const permissions = await getPermissionsForRole(role);
+
   return {
     userId: session.user.id,
     email: session.user.email!,
     name: session.user.name!,
     schoolId: session.user.schoolId ?? null,
-    role: session.user.role as Role,
-    permissions: session.user.permissions ?? [],
+    role,
+    permissions,
   };
 }
 
@@ -61,10 +65,39 @@ export async function requirePermission(permission: string): Promise<SessionCont
 
 export async function requireSchoolContext(): Promise<SessionContext & { schoolId: string }> {
   const ctx = await requireAuth();
-  if (!ctx.schoolId) {
+
+  const memberships = await prisma.userSchoolMembership.findMany({
+    where: { userId: ctx.userId, isActive: true },
+    select: { schoolId: true, role: true },
+  });
+
+  if (memberships.length === 0) {
     throw new ForbiddenError("School context required");
   }
-  return ctx as SessionContext & { schoolId: string };
+
+  let schoolId: string | null = null;
+
+  if (ctx.schoolId) {
+    const matchingMembership = memberships.find((membership) => membership.schoolId === ctx.schoolId);
+    if (matchingMembership) {
+      schoolId = matchingMembership.schoolId;
+    }
+  }
+
+  if (!schoolId) {
+    const roleMembership = memberships.find((membership) => membership.role === ctx.role);
+    schoolId = roleMembership?.schoolId ?? memberships[0]!.schoolId;
+  }
+
+  const school = await prisma.school.findUnique({
+    where: { id: schoolId },
+    select: { id: true },
+  });
+  if (!school) {
+    throw new ForbiddenError("School context is no longer valid. Please sign in again.");
+  }
+
+  return { ...ctx, schoolId };
 }
 
 export async function revalidateSessionForSensitiveOp(userId: string, schoolId: string) {
@@ -86,6 +119,8 @@ export function getRoleDashboardPath(role: Role): string {
       return "/admin";
     case "TEACHER":
       return "/teacher";
+    case "STAFF":
+      return "/staff";
     case "PARENT":
       return "/parent";
     default:

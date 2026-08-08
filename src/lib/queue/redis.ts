@@ -15,4 +15,5 @@ export const QUEUE_NAMES = {
   NOTIFICATIONS: "notifications",
   SCHEDULER: "scheduler",
   SCHEDULE_REMINDERS: "schedule-reminders",
+  PAYROLL_JOBS: "payroll-jobs",
 } as const;

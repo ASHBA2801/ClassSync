@@ -20,6 +20,13 @@ export const PERMISSIONS = {
   FEES_MANAGE: "fees:manage",
   FEES_PAY: "fees:pay",
   PAYMENTS_CONFIGURE: "payments:configure",
+  EMPLOYEES_MANAGE: "employees:manage",
+  PAYROLL_MANAGE: "payroll:manage",
+  PAYROLL_APPROVE: "payroll:approve",
+  PAYROLL_EXECUTE: "payroll:execute",
+  BANK_DETAILS_VIEW: "bank_details:view",
+  PAYOUTS_CONFIGURE: "payouts:configure",
+  PAYROLL_VIEW: "payroll:view",
   SYSTEM_ADMIN: "system:admin",
   AUDIT_VIEW: "audit:view",
   MONITORING_VIEW: "monitoring:view",
@@ -44,6 +51,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     PERMISSIONS.DOCUMENTS_REVIEW,
     PERMISSIONS.FEES_MANAGE,
     PERMISSIONS.PAYMENTS_CONFIGURE,
+    PERMISSIONS.EMPLOYEES_MANAGE,
+    PERMISSIONS.PAYROLL_MANAGE,
+    PERMISSIONS.PAYROLL_APPROVE,
+    PERMISSIONS.PAYROLL_EXECUTE,
+    PERMISSIONS.BANK_DETAILS_VIEW,
+    PERMISSIONS.PAYOUTS_CONFIGURE,
     PERMISSIONS.AUDIT_VIEW,
   ],
   TEACHER: [
@@ -52,6 +65,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     PERMISSIONS.ATTENDANCE_MARK,
     PERMISSIONS.ATTENDANCE_VIEW,
     PERMISSIONS.LEAVE_REQUEST,
+    PERMISSIONS.PAYROLL_VIEW,
+  ],
+  STAFF: [
+    PERMISSIONS.LEAVE_REQUEST,
+    PERMISSIONS.PAYROLL_VIEW,
+    PERMISSIONS.ATTENDANCE_MARK,
   ],
   PARENT: [
     PERMISSIONS.DOCUMENTS_UPLOAD,
@@ -61,16 +80,19 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
 };
 
 export async function getPermissionsForRole(role: Role): Promise<string[]> {
+  const defaults = DEFAULT_ROLE_PERMISSIONS[role] ?? [];
+
   const rolePerms = await prisma.rolePermission.findMany({
     where: { role },
     include: { permission: true },
   });
 
   if (rolePerms.length === 0) {
-    return DEFAULT_ROLE_PERMISSIONS[role] ?? [];
+    return defaults;
   }
 
-  return rolePerms.map((rp) => rp.permission.key);
+  const dbKeys = rolePerms.map((rp) => rp.permission.key);
+  return [...new Set([...dbKeys, ...defaults])];
 }
 
 export async function seedPermissions() {

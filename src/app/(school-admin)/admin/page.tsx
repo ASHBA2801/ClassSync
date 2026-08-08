@@ -8,27 +8,61 @@ import {
 } from "@/actions/school-admin";
 import { listEscalatedAttendanceAction } from "@/actions/attendance";
 import { listLeaveRequestsForReviewAction } from "@/actions/parent";
+import { getPendingManualPayrollReminderAction } from "@/actions/payroll";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { schoolAdminNav } from "@/lib/nav-config";
 import Link from "next/link";
-import { GraduationCap, UserCheck, AlertTriangle, Clock } from "lucide-react";
+import { GraduationCap, UserCheck, AlertTriangle, Clock, CreditCard } from "lucide-react";
 
 export default async function AdminDashboardPage() {
   const ctx = await getSessionContext();
   if (!ctx || ctx.role !== "SCHOOL_ADMIN") redirect("/login");
 
-  const [students, teachers, classes, escalations, leaveRequests] = await Promise.all([
+  const [students, teachers, classes, escalations, leaveRequests, payrollReminder] = await Promise.all([
     listStudentsAction(),
     listSchoolUsersAction("TEACHER"),
     listClassSectionsAction(),
     listEscalatedAttendanceAction(),
     listLeaveRequestsForReviewAction(),
+    getPendingManualPayrollReminderAction(),
   ]);
 
   return (
     <PortalShell title="School Admin" navItems={schoolAdminNav} userName={ctx.name}>
       <div className="space-y-6">
+        {payrollReminder && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div className="flex items-center gap-3">
+                <CreditCard className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm font-medium text-text-1">Monthly payroll pending</p>
+                  <p className="text-sm text-text-2">
+                    Salaries for {payrollReminder.monthLabel} need to be generated and paid.
+                  </p>
+                  {payrollReminder.status !== "none" && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-text-2">
+                      <span>Current status:</span>
+                      <Badge variant="warning">{payrollReminder.status}</Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Link
+                href={
+                  payrollReminder.payrollRunId
+                    ? `/admin/employees/payroll/${payrollReminder.payrollRunId}`
+                    : "/admin/employees/payroll"
+                }
+                className="inline-flex items-center rounded-[var(--radius-sm)] bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+              >
+                Go to Payroll
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
         {/* KPI Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>

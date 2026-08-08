@@ -2,6 +2,9 @@ import type { PrismaClient, ScheduleAlterationType } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { enqueueNotification } from "@/lib/notifications";
 import { validateSlotConflict, type ScheduleSlotInput } from "@/lib/scheduler/solver";
+import { dateToDayOfWeek, startOfDay } from "@/lib/scheduler/day-of-week";
+
+export { dateToDayOfWeek, startOfDay } from "@/lib/scheduler/day-of-week";
 
 export interface EffectiveSlot extends ScheduleSlotInput {
   id?: string;
@@ -32,18 +35,6 @@ export interface LeaveSubstitutionResult {
 }
 
 type DbClient = PrismaClient | Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
-
-/** Monday = 0, Sunday = 6 */
-export function dateToDayOfWeek(date: Date): number {
-  const day = date.getDay();
-  return day === 0 ? 6 : day - 1;
-}
-
-export function startOfDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 export function eachDateInRange(start: Date, end: Date): Date[] {
   const dates: Date[] = [];

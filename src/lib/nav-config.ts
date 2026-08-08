@@ -35,14 +35,16 @@ export const systemAdminNav: NavItem[] = [
 
 export const schoolAdminNav: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: "layout-dashboard" },
-  { href: "/admin/teachers", label: "Teachers", icon: "user-check" },
+  { href: "/admin/employees", label: "Employees", icon: "users" },
   { href: "/admin/students", label: "Students", icon: "graduation-cap" },
   { href: "/admin/classes", label: "Classes", icon: "book-open" },
   { href: "/admin/schedule/setup", label: "Timetable Setup", icon: "calendar-days" },
   { href: "/admin/schedule", label: "Schedule", icon: "calendar" },
+  { href: "/admin/calendar", label: "Working Calendar", icon: "calendar-days" },
   { href: "/admin/attendance", label: "Attendance", icon: "clipboard-check" },
   { href: "/admin/leave", label: "Leave Requests", icon: "file-text" },
   { href: "/admin/fees", label: "Fees", icon: "dollar-sign" },
+  { href: "/admin/employees/payroll", label: "Payroll", icon: "credit-card" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },
 ];
 
@@ -52,6 +54,7 @@ export const teacherNav: NavItem[] = [
   { href: "/teacher/schedule/swaps", label: "Swaps", icon: "clock" },
   { href: "/teacher/attendance", label: "Mark Attendance", icon: "clipboard-check" },
   { href: "/teacher/leave", label: "Leave Requests", icon: "clock" },
+  { href: "/teacher/payroll", label: "My Salary", icon: "credit-card" },
 ];
 
 export const parentNav: NavItem[] = [
@@ -69,12 +72,20 @@ export function getNavForRole(role: Role): NavItem[] {
       return schoolAdminNav;
     case "TEACHER":
       return teacherNav;
+    case "STAFF":
+      return staffNav;
     case "PARENT":
       return parentNav;
     default:
       return [];
   }
 }
+
+export const staffNav: NavItem[] = [
+  { href: "/staff", label: "Dashboard", icon: "layout-dashboard" },
+  { href: "/staff/payroll", label: "My Salary", icon: "credit-card" },
+  { href: "/staff/leave", label: "Leave", icon: "file-text" },
+];
 
 export function formatRoleLabel(role: string): string {
   return role

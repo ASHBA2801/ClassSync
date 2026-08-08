@@ -5,6 +5,7 @@ let attendanceQueue: Queue | null = null;
 let notificationsQueue: Queue | null = null;
 let schedulerQueue: Queue | null = null;
 let remindersQueue: Queue | null = null;
+let payrollQueue: Queue | null = null;
 
 function createQueue(name: string): Queue {
   return new Queue(name, { connection: getRedis() });
@@ -28,4 +29,21 @@ export function getSchedulerQueue() {
 export function getRemindersQueue() {
   if (!remindersQueue) remindersQueue = createQueue(QUEUE_NAMES.SCHEDULE_REMINDERS);
   return remindersQueue;
+}
+
+export function getPayrollQueue() {
+  if (!payrollQueue) payrollQueue = createQueue(QUEUE_NAMES.PAYROLL_JOBS);
+  return payrollQueue;
+}
+
+export async function schedulePayrollJobs() {
+  const queue = getPayrollQueue();
+  await queue.add(
+    "daily",
+    {},
+    {
+      repeat: { pattern: "0 6 * * *" },
+      jobId: "payroll-daily",
+    },
+  );
 }
