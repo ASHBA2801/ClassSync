@@ -149,6 +149,18 @@ enum DocumentStatus {
   REJECTED
 }
 
+enum DocumentType {
+  AADHAAR
+  BIRTH_CERTIFICATE
+  COMMUNITY_CERTIFICATE
+  MARKSHEET
+}
+
+enum UploaderType {
+  PARENT
+  TEACHER
+}
+
 enum FeeInvoiceStatus {
   DRAFT
   POSTED
@@ -641,6 +653,10 @@ model Document {
   name       String
   s3Key      String
   mimeType   String
+  documentType DocumentType?
+  uploaderType UploaderType @default(PARENT)
+  extracted   Json?
+  extractionConfidence Float?
   status     DocumentStatus @default(PENDING)
   reviewNote String?
   createdAt  DateTime       @default(now())

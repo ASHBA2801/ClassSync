@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   getDocumentUploadUrlAction,
   confirmDocumentUploadAction,
@@ -23,43 +24,60 @@ interface Student {
 }
 
 export function DocumentUploadForm({ students }: { students: Student[] }) {
+  const router = useRouter();
   const [studentId, setStudentId] = useState("");
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [relation, setRelation] = useState("");
+  const [documentType, setDocumentType] = useState("");
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!studentId) return;
+    const form = e.currentTarget;
 
     setLoading(true);
     setError("");
-    const fd = new FormData(e.currentTarget);
+    setDone(false);
+    const fd = new FormData(form);
     const file = fd.get("file") as File;
 
     try {
       const { uploadUrl, key } = await getDocumentUploadUrlAction({
         studentId,
         filename: file.name,
-        mimeType: file.type,
+        mimeType: file.type || "application/octet-stream",
       });
 
-      await fetch(uploadUrl, {
+      const uploadResp = await fetch(uploadUrl, {
         method: "PUT",
         body: file,
-        headers: { "Content-Type": file.type },
+        headers: { "Content-Type": file.type || "application/octet-stream" },
       });
+      if (!uploadResp.ok) {
+        throw new Error(`File upload failed (${uploadResp.status})`);
+      }
 
       await confirmDocumentUploadAction({
         studentId,
         name: file.name,
         s3Key: key,
-        mimeType: file.type,
+        mimeType: file.type || "application/octet-stream",
+        documentType: documentType || undefined,
       });
 
       setDone(true);
       setStudentId("");
-      e.currentTarget.reset();
+      setDocumentType("");
+      setRelation("");
+      try {
+        form.reset();
+      } catch {}
+      router.refresh();
+      // Extraction runs async — refresh again so fields appear when ready.
+      window.setTimeout(() => router.refresh(), 8000);
+      window.setTimeout(() => router.refresh(), 20000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -87,12 +105,41 @@ export function DocumentUploadForm({ students }: { students: Student[] }) {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>File</Label>
-            <FileInput name="file" required />
-          </div>
+            <div>
+              <Label>Uploader</Label>
+              <Select value={relation || undefined} onValueChange={setRelation}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Student / Father / Mother / Guardian" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="STUDENT">Student</SelectItem>
+                  <SelectItem value="FATHER">Father</SelectItem>
+                  <SelectItem value="MOTHER">Mother</SelectItem>
+                  <SelectItem value="GUARDIAN">Guardian</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Document Type</Label>
+              <Select value={documentType || undefined} onValueChange={setDocumentType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select document type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AADHAAR">Aadhaar</SelectItem>
+                  <SelectItem value="BIRTH_CERTIFICATE">Birth Certificate</SelectItem>
+                  <SelectItem value="COMMUNITY_CERTIFICATE">Community Certificate</SelectItem>
+                  <SelectItem value="MARKSHEET">Marksheet</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>File</Label>
+              <FileInput name="file" required />
+              <p className="text-sm text-muted">Please upload a single, clear document in focus — this improves extraction accuracy.</p>
+            </div>
           {error && <p className="text-sm text-danger">{error}</p>}
-          {done && <p className="text-sm text-success">Document uploaded for review</p>}
+          {done && <p className="text-sm text-success">Document uploaded — extracted details will appear below once processing finishes.</p>}
           <Button type="submit" disabled={loading}>
             {loading ? "Uploading..." : "Upload"}
           </Button>
