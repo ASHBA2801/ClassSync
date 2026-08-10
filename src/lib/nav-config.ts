@@ -51,6 +51,7 @@ export const teacherNav: NavItem[] = [
   { href: "/teacher/schedule", label: "Schedule", icon: "calendar" },
   { href: "/teacher/schedule/swaps", label: "Swaps", icon: "clock" },
   { href: "/teacher/attendance", label: "Mark Attendance", icon: "clipboard-check" },
+  { href: "/teacher/documents", label: "Documents", icon: "upload" },
   { href: "/teacher/leave", label: "Leave Requests", icon: "clock" },
 ];
 

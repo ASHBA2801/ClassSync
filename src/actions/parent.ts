@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { prisma, withTenantContext } from "@/lib/db/prisma";
 import { requireSchoolContext, requireSchoolPermission } from "@/lib/rbac/guard";
+import { ForbiddenError } from "@/lib/errors";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { getPresignedUploadUrl, buildS3Key } from "@/lib/storage/s3";
 import { enqueueNotification } from "@/lib/notifications";
@@ -37,9 +38,10 @@ const documentUploadSchema = z.object({
 export async function getDocumentUploadUrlAction(input: z.infer<typeof documentUploadSchema>) {
   const ctx = await requireSchoolPermission(PERMISSIONS.DOCUMENTS_UPLOAD);
   const data = documentUploadSchema.parse(input);
+  const mimeType = data.mimeType || "application/octet-stream";
 
   const key = buildS3Key(`documents/${ctx.schoolId}/${data.studentId}`, data.filename);
-  const uploadUrl = await getPresignedUploadUrl(key, data.mimeType);
+  const uploadUrl = await getPresignedUploadUrl(key, mimeType);
 
   return { uploadUrl, key };
 }
@@ -49,24 +51,60 @@ const confirmDocumentSchema = z.object({
   name: z.string(),
   s3Key: z.string(),
   mimeType: z.string(),
+  documentType: z.enum(["AADHAAR", "BIRTH_CERTIFICATE", "COMMUNITY_CERTIFICATE", "MARKSHEET"]).optional(),
 });
 
 export async function confirmDocumentUploadAction(input: z.infer<typeof confirmDocumentSchema>) {
   const ctx = await requireSchoolPermission(PERMISSIONS.DOCUMENTS_UPLOAD);
   const data = confirmDocumentSchema.parse(input);
 
-  return withTenantContext(ctx.schoolId, async (tx) => {
-    return tx.document.create({
-      data: {
-        schoolId: ctx.schoolId,
-        studentId: data.studentId,
-        uploadedBy: ctx.userId,
-        name: data.name,
-        s3Key: data.s3Key,
-        mimeType: data.mimeType,
-      },
-    });
+  const uploaderType = ctx.role === "PARENT" ? "PARENT" : "TEACHER";
+
+  const created = await withTenantContext(ctx.schoolId, async (tx) => {
+    const createData: any = {
+      schoolId: ctx.schoolId,
+      studentId: data.studentId,
+      uploadedBy: ctx.userId,
+      name: data.name,
+      s3Key: data.s3Key,
+      mimeType: data.mimeType,
+    };
+
+    // include new fields only if Prisma client supports them (avoid runtime errors before migration)
+    try {
+      const model = (prisma as any)?._dmmf?.modelMap?.Document;
+      const hasDocumentType = !!model?.fields?.find((f: any) => f.name === "documentType");
+      const hasUploaderType = !!model?.fields?.find((f: any) => f.name === "uploaderType");
+      if (hasDocumentType && data.documentType) createData.documentType = data.documentType;
+      if (hasUploaderType) createData.uploaderType = uploaderType;
+    } catch (err) {
+      // ignore and proceed without optional fields
+    }
+
+    return tx.document.create({ data: createData });
   });
+
+  // process document (OCR + extraction) asynchronously and update record
+  try {
+    const { processDocument } = await import("@/lib/ai/documentProcessor");
+    // run but don't block the response
+    processDocument({
+      s3Key: data.s3Key,
+      mimeType: data.mimeType,
+      documentId: created.id,
+      documentType: data.documentType,
+      uploaderType,
+      studentId: data.studentId,
+      schoolId: ctx.schoolId,
+      uploadedBy: ctx.userId,
+    }).catch((err) => {
+      console.error("Document processing failed:", err);
+    });
+  } catch (err) {
+    console.error("Failed to import document processor", err);
+  }
+
+  return created;
 }
 
 const leaveSchema = z.object({
@@ -129,6 +167,59 @@ export async function listPendingDocumentsAction() {
       where: { schoolId: ctx.schoolId, status: "PENDING" },
       include: { student: true },
       orderBy: { createdAt: "desc" },
+    });
+  });
+}
+
+export async function listParentDocumentsAction() {
+  const ctx = await requireSchoolContext();
+  return withTenantContext(ctx.schoolId, async (tx) => {
+    // documents uploaded by this parent or for students linked to this parent
+    const relationships = await tx.guardianRelationship.findMany({ where: { parentId: ctx.userId, schoolId: ctx.schoolId } });
+    const studentIds = relationships.map((r) => r.studentId);
+
+    return tx.document.findMany({
+      where: {
+        schoolId: ctx.schoolId,
+        OR: [{ uploadedBy: ctx.userId }, { studentId: { in: studentIds } }],
+      },
+      include: { student: true },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+  });
+}
+
+/** Documents for students in class sections assigned to the current teacher. */
+export async function listTeacherStudentDocumentsAction() {
+  const ctx = await requireSchoolContext();
+  if (ctx.role !== "TEACHER") {
+    throw new ForbiddenError("Teachers only");
+  }
+
+  return withTenantContext(ctx.schoolId, async (tx) => {
+    const assignments = await tx.teacherAssignment.findMany({
+      where: { schoolId: ctx.schoolId, teacherId: ctx.userId },
+      select: { classSectionId: true },
+    });
+    const classSectionIds = [...new Set(assignments.map((a) => a.classSectionId))];
+    if (classSectionIds.length === 0) return [];
+
+    const students = await tx.student.findMany({
+      where: { schoolId: ctx.schoolId, classSectionId: { in: classSectionIds } },
+      select: { id: true },
+    });
+    const studentIds = students.map((s) => s.id);
+    if (studentIds.length === 0) return [];
+
+    return tx.document.findMany({
+      where: {
+        schoolId: ctx.schoolId,
+        studentId: { in: studentIds },
+      },
+      include: { student: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
     });
   });
 }
