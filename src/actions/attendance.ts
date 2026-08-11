@@ -17,6 +17,7 @@ import {
 } from "@/lib/attendance/face-attendance";
 import { parseIsoDate } from "@/lib/calendar/working-days";
 import { isoDateString } from "@/lib/schemas/date";
+import { getFaceRecognitionProvider } from "@/lib/face/FaceRecognitionProvider";
 
 const submitAttendanceSchema = z.object({
   geoLat: z.number(),
@@ -394,9 +395,13 @@ export async function listTeacherAttendanceRecordsAction(startDate?: string, end
   });
 }
 
-export async function enrollFaceAction(_imageBase64: string) {
+export async function enrollFaceAction(imageBase64: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.ATTENDANCE_MARK);
   const key = `face/${ctx.userId}/enrolled.jpg`;
+
+  const provider = getFaceRecognitionProvider();
+  const buffer = Buffer.from(imageBase64, "base64");
+  await provider.enrollFace(ctx.userId, buffer);
 
   await prisma.user.update({
     where: { id: ctx.userId },
