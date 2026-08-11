@@ -1,5 +1,7 @@
 import { hash } from "bcryptjs";
+import type { EmployeeJobType } from "@prisma/client";
 import { prisma } from "../src/lib/db/prisma";
+import { encryptBankField } from "../src/lib/employees/bank";
 import { seedPermissions } from "../src/lib/rbac/permissions";
 import { analyzeScheduleFeasibility } from "../src/lib/scheduler/errors";
 import { solveSchedule, validateSectionScheduleQuality } from "../src/lib/scheduler/solver";
@@ -49,6 +51,115 @@ const DEMO_ASSIGNMENTS: Array<{ section: "A" | "B"; subject: string; teacherEmai
   { section: "B", subject: "History", teacherEmail: "teacher9@demo.com" },
   { section: "B", subject: "Physical Education", teacherEmail: "teacher10@demo.com" },
 ];
+
+const DEMO_SALARY_BY_JOB: Record<
+  EmployeeJobType,
+  { baseSalary: number; allowances: Record<string, number>; deductions: Record<string, number> }
+> = {
+  TEACHER: { baseSalary: 35000, allowances: { hra: 5000 }, deductions: { pf: 1800 } },
+  CLASS_TEACHER: { baseSalary: 38000, allowances: { hra: 5500 }, deductions: { pf: 1900 } },
+  PET_MASTER: { baseSalary: 32000, allowances: { sports: 2000 }, deductions: { pf: 1600 } },
+  LIBRARIAN: { baseSalary: 28000, allowances: { hra: 3000 }, deductions: { pf: 1400 } },
+  LAB_ASSISTANT: { baseSalary: 26000, allowances: { hra: 2500 }, deductions: { pf: 1300 } },
+  SPORTS_COACH: { baseSalary: 30000, allowances: { sports: 2500 }, deductions: { pf: 1500 } },
+  ACCOUNTANT: { baseSalary: 34000, allowances: { hra: 4000 }, deductions: { pf: 1700 } },
+  OFFICE_CLERK: { baseSalary: 22000, allowances: { hra: 2000 }, deductions: { pf: 1100 } },
+  RECEPTIONIST: { baseSalary: 21000, allowances: { hra: 1800 }, deductions: { pf: 1000 } },
+  VAN_DRIVER: { baseSalary: 22000, allowances: { travel: 1500 }, deductions: { pf: 1100 } },
+  BUS_DRIVER: { baseSalary: 24000, allowances: { travel: 1800 }, deductions: { pf: 1200 } },
+  TRANSPORT_COORDINATOR: { baseSalary: 28000, allowances: { travel: 2000 }, deductions: { pf: 1400 } },
+  SECURITY_GUARD: { baseSalary: 20000, allowances: { shift: 1500 }, deductions: { pf: 1000 } },
+  SECURITY_SUPERVISOR: { baseSalary: 26000, allowances: { shift: 2000 }, deductions: { pf: 1300 } },
+  CLEANER: { baseSalary: 18000, allowances: { maintenance: 1000 }, deductions: { pf: 900 } },
+  JANITOR: { baseSalary: 18000, allowances: { maintenance: 1000 }, deductions: { pf: 900 } },
+  GARDENER: { baseSalary: 19000, allowances: { maintenance: 1200 }, deductions: { pf: 950 } },
+  MAINTENANCE_STAFF: { baseSalary: 20000, allowances: { maintenance: 1500 }, deductions: { pf: 1000 } },
+  IT_SUPPORT: { baseSalary: 32000, allowances: { hra: 3500 }, deductions: { pf: 1600 } },
+  NURSE: { baseSalary: 29000, allowances: { medical: 2000 }, deductions: { pf: 1450 } },
+  COUNSELOR: { baseSalary: 33000, allowances: { hra: 4000 }, deductions: { pf: 1650 } },
+  PRINCIPAL: { baseSalary: 85000, allowances: { hra: 12000 }, deductions: { pf: 4200 } },
+  VICE_PRINCIPAL: { baseSalary: 70000, allowances: { hra: 10000 }, deductions: { pf: 3500 } },
+};
+
+const DEMO_BANK_IFSC = "HDFC0001234";
+const DEMO_BANK_NAME = "HDFC Bank";
+const SALARY_EFFECTIVE_FROM = new Date("2024-04-01");
+
+async function seedEmployeePayrollData(schoolId: string) {
+  console.log("Seeding employee salaries and bank accounts...");
+
+  const employees = await prisma.employee.findMany({
+    where: { schoolId, employmentStatus: "ACTIVE" },
+    include: { user: { select: { name: true, email: true } } },
+    orderBy: { employeeCode: "asc" },
+  });
+
+  for (const [index, employee] of employees.entries()) {
+    const salaryTemplate = DEMO_SALARY_BY_JOB[employee.jobType] ?? DEMO_SALARY_BY_JOB.TEACHER;
+
+    const existingSalary = await prisma.employeeSalary.findFirst({
+      where: {
+        schoolId,
+        employeeId: employee.id,
+        effectiveTo: null,
+      },
+    });
+
+    if (!existingSalary) {
+      await prisma.employeeSalary.create({
+        data: {
+          schoolId,
+          employeeId: employee.id,
+          baseSalary: salaryTemplate.baseSalary,
+          allowances: salaryTemplate.allowances,
+          deductions: salaryTemplate.deductions,
+          effectiveFrom: SALARY_EFFECTIVE_FROM,
+        },
+      });
+    }
+
+    const accountNumber = `50100${String(100001 + index).slice(-6)}`;
+    const encrypted = {
+      accountNumberEncrypted: encryptBankField(accountNumber),
+      ifscEncrypted: encryptBankField(DEMO_BANK_IFSC),
+      upiIdEncrypted: encryptBankField(
+        `${employee.user.email.split("@")[0]}@demo.upi`,
+      ),
+    };
+
+    const existingBank = await prisma.employeeBankAccount.findFirst({
+      where: { schoolId, employeeId: employee.id },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingBank) {
+      await prisma.employeeBankAccount.update({
+        where: { id: existingBank.id },
+        data: {
+          accountHolder: employee.user.name,
+          ...encrypted,
+          bankName: DEMO_BANK_NAME,
+          isVerified: true,
+          verifiedAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.employeeBankAccount.create({
+        data: {
+          schoolId,
+          employeeId: employee.id,
+          accountHolder: employee.user.name,
+          ...encrypted,
+          bankName: DEMO_BANK_NAME,
+          isVerified: true,
+          verifiedAt: new Date(),
+        },
+      });
+    }
+  }
+
+  console.log(`  ✓ Payroll data seeded for ${employees.length} employees`);
+}
 
 async function main() {
   console.log("Seeding permissions...");
@@ -343,11 +454,15 @@ async function main() {
     },
   });
 
+  await seedEmployeePayrollData(school.id);
+
   console.log("Seed complete!");
   console.log("System Admin: admin@classsync.app / admin123");
   console.log("School Admin: schooladmin@demo.com / school123");
   console.log("Teachers: teacher@demo.com … teacher10@demo.com / teacher123");
   console.log("Parent: parent@demo.com / parent123");
+  console.log("Staff: driver@demo.com, security@demo.com, cleaner@demo.com / staff123");
+  console.log("All demo employees include verified bank accounts and monthly salary records.");
   console.log(`School ID: ${school.id}`);
   console.log("");
   console.log(`Timetable demo (${DEMO_DAYS_PER_WEEK} days × ${DEMO_PERIODS_PER_DAY} periods = ${DEMO_TOTAL_WEEKLY_SLOTS} slots/week):`);

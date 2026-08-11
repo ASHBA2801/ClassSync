@@ -22,6 +22,48 @@ export async function getPayoutConfig(schoolId: string): Promise<PayoutConfig | 
   };
 }
 
+export const RAZORPAY_MAX_REFERENCE_ID_LENGTH = 40;
+
+export function toRazorpayReferenceId(referenceId: string): string {
+  if (referenceId.length <= RAZORPAY_MAX_REFERENCE_ID_LENGTH) {
+    return referenceId;
+  }
+  return crypto.createHash("sha256").update(referenceId).digest("hex").slice(0, RAZORPAY_MAX_REFERENCE_ID_LENGTH);
+}
+
+export const RAZORPAY_MAX_NARRATION_LENGTH = 30;
+
+export function toRazorpayNarration(narration: string): string {
+  const sanitized = narration
+    .replace(/[^a-zA-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!sanitized) return "Salary Payout";
+  return sanitized.slice(0, RAZORPAY_MAX_NARRATION_LENGTH);
+}
+
+export function formatPayrollNarration(periodStart: Date): string {
+  const year = periodStart.getUTCFullYear();
+  const month = String(periodStart.getUTCMonth() + 1).padStart(2, "0");
+  return toRazorpayNarration(`Salary ${year}${month}`);
+}
+
+export type MappedPayoutStatus = "SUCCESS" | "FAILED" | "REVERSED" | "PROCESSING";
+
+export function mapRazorpayPayoutStatus(status: string): MappedPayoutStatus {
+  switch (status) {
+    case "processed":
+      return "SUCCESS";
+    case "failed":
+    case "cancelled":
+      return "FAILED";
+    case "reversed":
+      return "REVERSED";
+    default:
+      return "PROCESSING";
+  }
+}
+
 function authHeader(config: PayoutConfig): string {
   return `Basic ${Buffer.from(`${config.apiKey}:${config.apiSecret}`).toString("base64")}`;
 }
@@ -106,11 +148,22 @@ export async function createPayout(
       mode: "IMPS",
       purpose: "salary",
       queue_if_low_balance: true,
-      reference_id: input.idempotencyKey,
-      narration: input.narration,
+      reference_id: toRazorpayReferenceId(input.idempotencyKey),
+      narration: toRazorpayNarration(input.narration),
     },
   );
   return payout;
+}
+
+export async function fetchRazorpayPayout(
+  config: PayoutConfig,
+  payoutId: string,
+): Promise<{ id: string; status: string; failure_reason?: string | null }> {
+  return razorpayXRequest<{ id: string; status: string; failure_reason?: string | null }>(
+    config,
+    "GET",
+    `/payouts/${payoutId}`,
+  );
 }
 
 export function verifyPayoutWebhook(config: PayoutConfig, body: string, signature: string): boolean {

@@ -43,6 +43,45 @@ describe("Razorpay payment signature", () => {
   });
 });
 
+describe("Razorpay payout reference id", () => {
+  it("keeps short reference ids unchanged", async () => {
+    const { toRazorpayReferenceId, RAZORPAY_MAX_REFERENCE_ID_LENGTH } = await import(
+      "@/lib/payouts/razorpayx"
+    );
+    const shortId = "00000000-0000-4000-8000-000000000001";
+    expect(shortId.length).toBeLessThanOrEqual(RAZORPAY_MAX_REFERENCE_ID_LENGTH);
+    expect(toRazorpayReferenceId(shortId)).toBe(shortId);
+  });
+
+  it("hashes long idempotency keys to 40 characters", async () => {
+    const { toRazorpayReferenceId, RAZORPAY_MAX_REFERENCE_ID_LENGTH } = await import(
+      "@/lib/payouts/razorpayx"
+    );
+    const longKey = `${"a".repeat(36)}:${"b".repeat(36)}:${"c".repeat(36)}`;
+    const referenceId = toRazorpayReferenceId(longKey);
+    expect(referenceId.length).toBe(RAZORPAY_MAX_REFERENCE_ID_LENGTH);
+  });
+
+  it("sanitizes payout narration for Razorpay rules", async () => {
+    const { toRazorpayNarration, formatPayrollNarration, RAZORPAY_MAX_NARRATION_LENGTH } =
+      await import("@/lib/payouts/razorpayx");
+
+    expect(toRazorpayNarration("Salary 2026-07")).toBe("Salary 2026 07");
+    expect(formatPayrollNarration(new Date("2026-07-01T00:00:00.000Z"))).toBe("Salary 202607");
+    expect(toRazorpayNarration("a".repeat(40)).length).toBe(RAZORPAY_MAX_NARRATION_LENGTH);
+  });
+
+  it("maps Razorpay payout statuses to internal statuses", async () => {
+    const { mapRazorpayPayoutStatus } = await import("@/lib/payouts/razorpayx");
+
+    expect(mapRazorpayPayoutStatus("processed")).toBe("SUCCESS");
+    expect(mapRazorpayPayoutStatus("processing")).toBe("PROCESSING");
+    expect(mapRazorpayPayoutStatus("queued")).toBe("PROCESSING");
+    expect(mapRazorpayPayoutStatus("failed")).toBe("FAILED");
+    expect(mapRazorpayPayoutStatus("reversed")).toBe("REVERSED");
+  });
+});
+
 describe("payment provider config schema", () => {
   it("requires credentials when enabling Razorpay", async () => {
     const { paymentProviderConfigSchema } = await import("@/lib/payments/types");

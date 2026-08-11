@@ -21,22 +21,36 @@ interface Student {
 
 export function ParentLeaveForm({ students }: { students: Student[] }) {
   const [studentId, setStudentId] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!studentId) return;
+    if (!startDate || !endDate) {
+      setError("Please select both start and end dates.");
+      return;
+    }
 
+    setError(null);
     const fd = new FormData(e.currentTarget);
-    await submitParentLeaveAction({
-      studentId,
-      startDate: fd.get("startDate") as string,
-      endDate: fd.get("endDate") as string,
-      reason: fd.get("reason") as string,
-    });
-    setDone(true);
-    setStudentId("");
-    e.currentTarget.reset();
+    try {
+      await submitParentLeaveAction({
+        studentId,
+        startDate,
+        endDate,
+        reason: fd.get("reason") as string,
+      });
+      setDone(true);
+      setStudentId("");
+      setStartDate("");
+      setEndDate("");
+      e.currentTarget.reset();
+    } catch {
+      setError("Could not submit leave request. Check the dates and try again.");
+    }
   }
 
   return (
@@ -56,9 +70,10 @@ export function ParentLeaveForm({ students }: { students: Student[] }) {
           </SelectContent>
         </Select>
       </div>
-      <div><Label>Start Date</Label><DatePicker name="startDate" required /></div>
-      <div><Label>End Date</Label><DatePicker name="endDate" required /></div>
+      <div><Label>Start Date</Label><DatePicker name="startDate" value={startDate} onChange={setStartDate} required /></div>
+      <div><Label>End Date</Label><DatePicker name="endDate" value={endDate} onChange={setEndDate} required /></div>
       <div><Label>Reason</Label><Input name="reason" required /></div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
       {done && <p className="text-sm text-success">Leave request submitted</p>}
       <Button type="submit">Submit</Button>
     </form>

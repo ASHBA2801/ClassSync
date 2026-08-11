@@ -3,10 +3,11 @@ import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect, notFound } from "next/navigation";
 import { getPayrollRunAction } from "@/actions/payroll";
 import { PayrollRunActions } from "@/components/employees/payroll-run-actions";
+import { PayrollPayoutStatusPanel } from "@/components/employees/payroll-payout-status-panel";
 import { schoolAdminNav } from "@/lib/nav-config";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { summarizePayoutStatuses } from "@/lib/payroll/payout-status";
 import Link from "next/link";
 
 interface Props {
@@ -21,13 +22,26 @@ export default async function PayrollRunDetailPage({ params }: Props) {
   const run = await getPayrollRunAction(id);
   if (!run) notFound();
 
+  const payoutSummary = summarizePayoutStatuses(run.payouts);
+
   return (
     <PortalShell title="Payroll Run" navItems={schoolAdminNav} userName={ctx.name}>
-      <div className="mb-4">
-        <Link href="/admin/employees/payroll" className="text-sm text-text-2 hover:underline">← Back to Payroll</Link>
+      <div className="mb-4 flex flex-wrap items-center gap-4">
+        <Link href="/admin/employees/payroll" className="text-sm text-text-2 hover:underline">
+          ← Back to Payroll
+        </Link>
+        <Link href="/admin/employees/payouts" className="text-sm text-text-2 hover:underline">
+          View all payout history
+        </Link>
       </div>
 
-      <PayrollRunActions payrollRunId={run.id} status={run.status} />
+      <PayrollRunActions
+        payrollRunId={run.id}
+        status={run.status}
+        failedPayoutCount={payoutSummary.FAILED}
+        pendingPayoutCount={payoutSummary.PENDING}
+        processingPayoutCount={payoutSummary.PROCESSING}
+      />
 
       <Card className="mb-6">
         <CardHeader>
@@ -36,44 +50,32 @@ export default async function PayrollRunDetailPage({ params }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-6 text-sm">
-          <span>Status: <Badge>{run.status}</Badge></span>
+          <span>
+            Run status:{" "}
+            <Badge variant={run.status === "COMPLETED" ? "success" : run.status === "FAILED" ? "danger" : "warning"}>
+              {run.status}
+            </Badge>
+          </span>
           <span>Employees: {run.employeeCount}</span>
           <span>Total: ₹{run.totalAmount.toString()}</span>
           {run.approvedBy && <span>Approved by: {run.approvedBy.name}</span>}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Salary Slips</CardTitle></CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Gross</TableHead>
-                <TableHead>Net</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Failure</TableHead>
-                <TableHead>Slip</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {run.payouts.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>{p.employee.user.name}</TableCell>
-                  <TableCell>₹{p.grossAmount.toString()}</TableCell>
-                  <TableCell>₹{p.netAmount.toString()}</TableCell>
-                  <TableCell><Badge variant={p.status === "SUCCESS" ? "success" : "warning"}>{p.status}</Badge></TableCell>
-                  <TableCell className="max-w-xs truncate text-sm text-text-2">{p.failureReason ?? "—"}</TableCell>
-                  <TableCell>
-                    <Link href={`/admin/employees/payouts/${p.id}`} className="text-sm hover:underline">View slip</Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <PayrollPayoutStatusPanel
+        payouts={run.payouts.map((payout) => ({
+          id: payout.id,
+          grossAmount: payout.grossAmount.toString(),
+          netAmount: payout.netAmount.toString(),
+          status: payout.status,
+          failureReason: payout.failureReason,
+          razorpayPayoutId: payout.razorpayPayoutId,
+          paidAt: payout.paidAt,
+          updatedAt: payout.updatedAt,
+          employee: payout.employee,
+        }))}
+        summary={payoutSummary}
+      />
     </PortalShell>
   );
 }

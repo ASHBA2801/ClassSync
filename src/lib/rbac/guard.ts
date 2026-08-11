@@ -1,7 +1,7 @@
 import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, withSystemAdminContext } from "@/lib/db/prisma";
 import { getPermissionsForRole } from "./permissions";
 
 export interface SessionContext {
@@ -66,10 +66,12 @@ export async function requirePermission(permission: string): Promise<SessionCont
 export async function requireSchoolContext(): Promise<SessionContext & { schoolId: string }> {
   const ctx = await requireAuth();
 
-  const memberships = await prisma.userSchoolMembership.findMany({
-    where: { userId: ctx.userId, isActive: true },
-    select: { schoolId: true, role: true },
-  });
+  const memberships = await withSystemAdminContext(async (tx) =>
+    tx.userSchoolMembership.findMany({
+      where: { userId: ctx.userId, isActive: true },
+      select: { schoolId: true, role: true },
+    }),
+  );
 
   if (memberships.length === 0) {
     throw new ForbiddenError("School context required");
@@ -101,9 +103,11 @@ export async function requireSchoolContext(): Promise<SessionContext & { schoolI
 }
 
 export async function revalidateSessionForSensitiveOp(userId: string, schoolId: string) {
-  const membership = await prisma.userSchoolMembership.findUnique({
-    where: { userId_schoolId: { userId, schoolId } },
-  });
+  const membership = await withSystemAdminContext(async (tx) =>
+    tx.userSchoolMembership.findUnique({
+      where: { userId_schoolId: { userId, schoolId } },
+    }),
+  );
   if (!membership || !membership.isActive) {
     throw new ForbiddenError("Membership no longer valid");
   }

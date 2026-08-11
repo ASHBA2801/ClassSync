@@ -18,27 +18,43 @@ export function StaffLeaveForm() {
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [leaveType, setLeaveType] = useState<"REGULAR" | "OD">("REGULAR");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!startDate || !endDate) {
+      setError("Please select both start and end dates.");
+      return;
+    }
+
     setLoading(true);
+    setError(null);
     const fd = new FormData(e.currentTarget);
-    await submitStaffLeaveAction({
-      startDate: fd.get("startDate") as string,
-      endDate: fd.get("endDate") as string,
-      reason: fd.get("reason") as string,
-      leaveType,
-    });
-    setDone(true);
-    setLoading(false);
-    e.currentTarget.reset();
-    setLeaveType("REGULAR");
+    try {
+      await submitStaffLeaveAction({
+        startDate,
+        endDate,
+        reason: fd.get("reason") as string,
+        leaveType,
+      });
+      setDone(true);
+      e.currentTarget.reset();
+      setStartDate("");
+      setEndDate("");
+      setLeaveType("REGULAR");
+    } catch {
+      setError("Could not submit leave request. Check the dates and try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div><Label>Start Date</Label><DatePicker name="startDate" required /></div>
-      <div><Label>End Date</Label><DatePicker name="endDate" required /></div>
+      <div><Label>Start Date</Label><DatePicker name="startDate" value={startDate} onChange={setStartDate} required /></div>
+      <div><Label>End Date</Label><DatePicker name="endDate" value={endDate} onChange={setEndDate} required /></div>
       <div className="space-y-1">
         <Label>Leave type</Label>
         <Select value={leaveType} onValueChange={(value: "REGULAR" | "OD") => setLeaveType(value)}>
@@ -52,6 +68,7 @@ export function StaffLeaveForm() {
         </Select>
       </div>
       <div><Label>Reason</Label><Input name="reason" required /></div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
       {done && <p className="text-sm text-success">Leave request submitted</p>}
       <Button type="submit" disabled={loading}>Submit</Button>
     </form>

@@ -45,6 +45,7 @@ export const schoolAdminNav: NavItem[] = [
   { href: "/admin/leave", label: "Leave Requests", icon: "file-text" },
   { href: "/admin/fees", label: "Fees", icon: "dollar-sign" },
   { href: "/admin/employees/payroll", label: "Payroll", icon: "credit-card" },
+  { href: "/admin/employees/payouts", label: "Payout History", icon: "file-text" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },
 ];
 

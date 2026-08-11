@@ -11,8 +11,9 @@ import {
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { parseSalaryComponents } from "@/lib/employees/salary";
-import { executePayrollPayouts } from "@/lib/payouts/execute";
+import { executePayrollPayouts, retryFailedPayrollPayouts, syncPayrollPayoutStatusesFromRazorpay } from "@/lib/payouts/execute";
 import { collectPayrollReadiness } from "@/lib/payroll/readiness";
+import { summarizePayoutStatuses } from "@/lib/payroll/payout-status";
 import {
   generateMonthlyPayrollForSchool,
   startPayrollPayoutForSchool,
@@ -38,6 +39,7 @@ export async function listPayrollRunsAction() {
       include: {
         approvedBy: { select: { name: true } },
         _count: { select: { payouts: true } },
+        payouts: { select: { status: true } },
       },
       orderBy: { periodStart: "desc" },
     }),
@@ -52,11 +54,14 @@ export async function listPayrollRunsAction() {
     employeeCount: run.employeeCount,
     approvedBy: run.approvedBy,
     _count: run._count,
+    payoutSummary: summarizePayoutStatuses(run.payouts),
   }));
 }
 
 export async function getPayrollRunAction(id: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.PAYROLL_MANAGE);
+
+  await syncPayrollPayoutStatusesFromRazorpay(ctx.schoolId, id);
 
   return withTenantContext(ctx.schoolId, async (tx) => {
     const run = await tx.payrollRun.findFirst({
@@ -72,6 +77,12 @@ export async function getPayrollRunAction(id: string) {
         },
       },
     });
+    if (!run) return null;
+
+    run.payouts.sort((a, b) =>
+      a.employee.user.name.localeCompare(b.employee.user.name),
+    );
+
     return run;
   });
 }
@@ -123,6 +134,30 @@ export async function startPayrollPayoutAction(payrollRunId: string) {
   await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
 
   const result = await startPayrollPayoutForSchool(ctx.schoolId, payrollRunId, ctx.userId);
+
+  revalidatePath("/admin/employees/payroll");
+  revalidatePath("/admin/employees/payouts");
+  revalidatePath(`/admin/employees/payroll/${payrollRunId}`);
+  revalidatePath("/admin");
+  return result;
+}
+
+export async function syncPayrollPayoutStatusesAction(payrollRunId: string) {
+  const ctx = await requireSchoolPermission(PERMISSIONS.PAYROLL_MANAGE);
+
+  const result = await syncPayrollPayoutStatusesFromRazorpay(ctx.schoolId, payrollRunId);
+
+  revalidatePath("/admin/employees/payroll");
+  revalidatePath("/admin/employees/payouts");
+  revalidatePath(`/admin/employees/payroll/${payrollRunId}`);
+  return result;
+}
+
+export async function retryFailedPayrollPayoutsAction(payrollRunId: string) {
+  const ctx = await requireSchoolPermission(PERMISSIONS.PAYROLL_EXECUTE);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+
+  const result = await retryFailedPayrollPayouts(ctx.schoolId, payrollRunId, ctx.userId);
 
   revalidatePath("/admin/employees/payroll");
   revalidatePath("/admin/employees/payouts");
@@ -202,7 +237,7 @@ export async function markPayoutPaidManuallyAction(payoutId: string) {
 
     await tx.salaryPayout.update({
       where: { id: payoutId },
-      data: { status: "SUCCESS", paidAt: new Date() },
+      data: { status: "SUCCESS", paidAt: new Date(), failureReason: null },
     });
   });
 
@@ -215,6 +250,19 @@ export async function markPayoutPaidManuallyAction(payoutId: string) {
   });
 
   revalidatePath("/admin/employees/payouts");
+  revalidatePath(`/admin/employees/payouts/${payoutId}`);
+  revalidatePath("/admin/employees/payroll");
+
+  await withTenantContext(ctx.schoolId, async (tx) => {
+    const payout = await tx.salaryPayout.findFirst({
+      where: { id: payoutId, schoolId: ctx.schoolId },
+      select: { payrollRunId: true },
+    });
+    if (payout) {
+      revalidatePath(`/admin/employees/payroll/${payout.payrollRunId}`);
+    }
+  });
+
   return { success: true };
 }
 
@@ -229,7 +277,7 @@ export async function listSalaryPayoutsAction(payrollRunId?: string) {
       },
       include: {
         employee: { include: { user: { select: { name: true, email: true } } } },
-        payrollRun: { select: { periodStart: true, periodEnd: true } },
+        payrollRun: { select: { id: true, periodStart: true, periodEnd: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -286,6 +334,7 @@ export async function getSalarySlipAction(payoutId: string) {
 
     return {
       id: payout.id,
+      payrollRunId: payout.payrollRunId,
       employeeName: payout.employee.user.name,
       employeeCode: payout.employee.employeeCode,
       periodStart: payout.payrollRun.periodStart,
@@ -295,6 +344,9 @@ export async function getSalarySlipAction(payoutId: string) {
       deductions: parseSalaryComponents(payout.deductions),
       status: payout.status,
       paidAt: payout.paidAt,
+      failureReason: payout.failureReason,
+      razorpayPayoutId: payout.razorpayPayoutId,
+      updatedAt: payout.updatedAt,
     };
   });
 }

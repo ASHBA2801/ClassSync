@@ -47,6 +47,8 @@ export async function generatePayrollRunCore(
       const salary = employee.salaries[0];
       if (!salary) continue;
 
+      const payoutId = randomUUID();
+
       const baseSalary = Number(salary.baseSalary);
       const allowances = parseSalaryComponents(salary.allowances);
       const baseDeductions = parseSalaryComponents(salary.deductions);
@@ -72,6 +74,7 @@ export async function generatePayrollRunCore(
 
       await tx.salaryPayout.create({
         data: {
+          id: payoutId,
           schoolId,
           payrollRunId: payrollRun.id,
           employeeId: employee.id,
@@ -79,7 +82,7 @@ export async function generatePayrollRunCore(
           netAmount: net,
           deductions,
           status: "PENDING",
-          idempotencyKey: `${payrollRun.id}:${employee.id}:${randomUUID()}`,
+          idempotencyKey: payoutId,
         },
       });
 

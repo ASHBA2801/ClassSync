@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { PayoutStatusBadge } from "@/components/employees/payout-status-badge";
+import { formatPayoutSummary, type PayoutStatusSummary } from "@/lib/payroll/payout-status";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface PayrollRunRow {
@@ -24,6 +26,7 @@ interface PayrollRunRow {
   employeeCount: number;
   approvedBy: { name: string } | null;
   _count: { payouts: number };
+  payoutSummary: PayoutStatusSummary;
 }
 
 interface Props {
@@ -110,7 +113,8 @@ export function PayrollManagement({ runs, readiness, payoutWebhookUrl }: Props) 
             <TableHead>Period</TableHead>
             <TableHead>Employees</TableHead>
             <TableHead>Total</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>Run Status</TableHead>
+            <TableHead>Payment Status</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -125,16 +129,28 @@ export function PayrollManagement({ runs, readiness, payoutWebhookUrl }: Props) 
               <TableCell>{run.employeeCount}</TableCell>
               <TableCell>₹{run.totalAmount}</TableCell>
               <TableCell>
-                <Badge variant={run.status === "COMPLETED" ? "success" : "warning"}>{run.status}</Badge>
+                <Badge variant={run.status === "COMPLETED" ? "success" : run.status === "FAILED" ? "danger" : "warning"}>
+                  {run.status}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <div className="space-y-1">
+                  <p className="text-sm">{formatPayoutSummary(run.payoutSummary)}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {run.payoutSummary.SUCCESS > 0 && <PayoutStatusBadge status="SUCCESS" />}
+                    {run.payoutSummary.PROCESSING > 0 && <PayoutStatusBadge status="PROCESSING" />}
+                    {run.payoutSummary.PENDING > 0 && <PayoutStatusBadge status="PENDING" />}
+                    {run.payoutSummary.FAILED > 0 && <PayoutStatusBadge status="FAILED" />}
+                    {run.payoutSummary.REVERSED > 0 && <PayoutStatusBadge status="REVERSED" />}
+                  </div>
+                </div>
               </TableCell>
               <TableCell className="space-x-2">
+                <Button size="sm" variant="outline" asChild>
+                  <Link href={`/admin/employees/payroll/${run.id}`}>View Status</Link>
+                </Button>
                 {(run.status === "DRAFT" || run.status === "APPROVED") && (
-                  <>
-                    <Button size="sm" variant="outline" asChild>
-                      <Link href={`/admin/employees/payroll/${run.id}`}>Review</Link>
-                    </Button>
-                    <Button size="sm" onClick={() => startPayout(run.id)}>Start Payout</Button>
-                  </>
+                  <Button size="sm" onClick={() => startPayout(run.id)}>Start Payout</Button>
                 )}
               </TableCell>
             </TableRow>

@@ -8,6 +8,8 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { getPresignedUploadUrl, buildS3Key } from "@/lib/storage/s3";
 import { enqueueNotification } from "@/lib/notifications";
 import { applyLeaveSubstitutions } from "@/lib/scheduler/smart-scheduler";
+import { parseIsoDate } from "@/lib/calendar/working-days";
+import { isoDateString } from "@/lib/schemas/date";
 
 export async function getLinkedStudentsAction() {
   const ctx = await requireSchoolContext();
@@ -107,12 +109,17 @@ export async function confirmDocumentUploadAction(input: z.infer<typeof confirmD
   return created;
 }
 
-const leaveSchema = z.object({
-  studentId: z.string().uuid(),
-  startDate: z.string(),
-  endDate: z.string(),
-  reason: z.string().min(3),
-});
+const leaveSchema = z
+  .object({
+    studentId: z.string().uuid(),
+    startDate: isoDateString,
+    endDate: isoDateString,
+    reason: z.string().min(3),
+  })
+  .refine((data) => data.endDate >= data.startDate, {
+    message: "End date must be on or after start date",
+    path: ["endDate"],
+  });
 
 export async function submitParentLeaveAction(input: z.infer<typeof leaveSchema>) {
   const ctx = await requireSchoolPermission(PERMISSIONS.LEAVE_REQUEST);
@@ -125,8 +132,8 @@ export async function submitParentLeaveAction(input: z.infer<typeof leaveSchema>
         requesterId: ctx.userId,
         requesterType: "PARENT",
         studentId: data.studentId,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+        startDate: parseIsoDate(data.startDate),
+        endDate: parseIsoDate(data.endDate),
         reason: data.reason,
       },
     });

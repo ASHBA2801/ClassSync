@@ -15,6 +15,8 @@ import {
   ATTENDANCE_MAX_ATTEMPTS,
   getNextAttemptNumber,
 } from "@/lib/attendance/face-attendance";
+import { parseIsoDate } from "@/lib/calendar/working-days";
+import { isoDateString } from "@/lib/schemas/date";
 
 const submitAttendanceSchema = z.object({
   geoLat: z.number(),
@@ -259,12 +261,18 @@ export async function markStudentAbsentAction(studentId: string, date?: string) 
   return record;
 }
 
-const leaveSchema = z.object({
-  startDate: z.string(),
-  endDate: z.string(),
-  reason: z.string().min(3),
-  leaveType: z.enum(["REGULAR", "OD"]).default("REGULAR"),
-});
+
+const leaveSchema = z
+  .object({
+    startDate: isoDateString,
+    endDate: isoDateString,
+    reason: z.string().min(3),
+    leaveType: z.enum(["REGULAR", "OD"]).default("REGULAR"),
+  })
+  .refine((data) => data.endDate >= data.startDate, {
+    message: "End date must be on or after start date",
+    path: ["endDate"],
+  });
 
 export async function submitTeacherLeaveAction(input: z.infer<typeof leaveSchema>) {
   const ctx = await requireSchoolPermission(PERMISSIONS.LEAVE_REQUEST);
@@ -276,8 +284,8 @@ export async function submitTeacherLeaveAction(input: z.infer<typeof leaveSchema
         schoolId: ctx.schoolId,
         requesterId: ctx.userId,
         requesterType: "TEACHER",
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+        startDate: parseIsoDate(data.startDate),
+        endDate: parseIsoDate(data.endDate),
         reason: data.reason,
         leaveType: data.leaveType,
       },
@@ -305,8 +313,8 @@ export async function submitStaffLeaveAction(input: z.infer<typeof leaveSchema>)
         schoolId: ctx.schoolId,
         requesterId: ctx.userId,
         requesterType: "STAFF",
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+        startDate: parseIsoDate(data.startDate),
+        endDate: parseIsoDate(data.endDate),
         reason: data.reason,
         leaveType: data.leaveType,
       },
