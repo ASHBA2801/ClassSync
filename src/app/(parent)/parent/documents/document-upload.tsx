@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { DocumentType } from "@prisma/client";
 import {
   getDocumentUploadUrlAction,
   confirmDocumentUploadAction,
@@ -30,7 +31,7 @@ export function DocumentUploadForm({ students }: { students: Student[] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [relation, setRelation] = useState("");
-  const [documentType, setDocumentType] = useState("");
+  const [documentType, setDocumentType] = useState<DocumentType | "">("");
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -121,7 +122,10 @@ export function DocumentUploadForm({ students }: { students: Student[] }) {
             </div>
             <div>
               <Label>Document Type</Label>
-              <Select value={documentType || undefined} onValueChange={setDocumentType}>
+              <Select
+                value={documentType || undefined}
+                onValueChange={(value) => setDocumentType(value as DocumentType)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select document type" />
                 </SelectTrigger>

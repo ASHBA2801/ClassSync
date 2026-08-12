@@ -9,7 +9,7 @@ import { schoolAdminNav } from "@/lib/nav-config";
 
 export default async function SettingsPage() {
   const ctx = await getSessionContext();
-  if (!ctx || ctx.role !== "SCHOOL_ADMIN") redirect("/login");
+  if (!ctx || ctx.role !== "SCHOOL_ADMIN" || !ctx.schoolId) redirect("/login");
 
   const [school, paymentProviders, payoutConfig] = await Promise.all([
     getSchoolSettingsAction(),
