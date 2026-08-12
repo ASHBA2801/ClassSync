@@ -1,17 +1,21 @@
 # ClassSync — Multi-Tenant School ERP
 
-A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, PostgreSQL RLS, Auth.js, BullMQ, and Razorpay.
+A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, PostgreSQL RLS, Auth.js, BullMQ, and multi-provider payments.
 
 ## Features
 
 - **Multi-tenancy** with PostgreSQL Row-Level Security (RLS) backstop
-- **Roles:** System Admin, School Admin, Teacher, Parent (students are records, not accounts)
-- **Conflict-free class scheduler** (CSP backtracking with setup gatekeeper wizard)
-- **Teacher attendance** with geofence + face recognition queue + retry/escalation flow
-- **Parent portal** for documents, leave requests, fee payments
-- **Per-tenant Razorpay** payment integration with encrypted keys
+- **Roles:** System Admin, School Admin, Teacher, Staff, Parent (students are records, not accounts)
+- **Employee management** with job types (teaching, transport, security, maintenance, leadership, and more)
+- **Conflict-free class scheduler** (CSP backtracking with setup gatekeeper wizard + swap requests)
+- **Teacher & staff attendance** with geofence + face recognition queue + retry/escalation flow
+- **Working calendar** for school holidays and working-day rules
+- **Payroll & payouts** (monthly runs, salary slips, RazorpayX payouts when configured)
+- **Parent portal** for documents, leave requests, and fee payments
+- **Multi-provider fee payments** — Razorpay, PhonePe, PayPal, Stripe (per-tenant encrypted keys)
 - **PWA** with service worker, offline fallback, background sync for attendance
-- **BullMQ workers** for face verification, notifications, scheduler jobs
+- **BullMQ workers** for face verification, notifications, document AI, and payroll jobs
+- **Campus map picker** via Google Maps (optional; used in Admin → Settings)
 
 ## Tech Stack
 
@@ -20,7 +24,10 @@ A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, 
 - Prisma + PostgreSQL with RLS
 - BullMQ + Redis
 - AWS S3 + Rekognition (cloud face recognition for attendance)
-- Razorpay (per-tenant keys)
+- Razorpay / PhonePe / PayPal / Stripe (per-tenant fee providers)
+- RazorpayX (optional staff salary payouts)
+- Google Maps (campus geofence location picker)
+- Web Push (VAPID)
 
 ## Getting Started
 
@@ -52,7 +59,7 @@ Docker services:
 
 ### Option B: Manual setup
 
-### Prerequisites
+#### Prerequisites
 
 - Node.js 20+
 - PostgreSQL 15+
@@ -83,15 +90,43 @@ npm run worker    # BullMQ workers (separate terminal)
 | System Admin | admin@classsync.app | admin123 |
 | School Admin | schooladmin@demo.com | school123 |
 | Teacher | teacher@demo.com | teacher123 |
+| Staff (Driver) | driver@demo.com | staff123 |
+| Staff (Security) | security@demo.com | staff123 |
+| Staff (Cleaner) | cleaner@demo.com | staff123 |
 | Parent | parent@demo.com | parent123 |
 
 ### Testing
 
 ```bash
-npm test          # Unit tests (geofence, scheduler, encryption, attendance FSM)
+npm test          # Unit tests (geofence, scheduler, encryption, attendance FSM, employees)
 ```
 
 Integration tests for RLS tenant isolation run when `DATABASE_URL` is set.
+
+## Environment Variables
+
+Copy from `.env.example` (manual) or `.env.docker` (Docker Compose + MinIO + mock face provider).
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `REDIS_URL` | Yes | Redis for BullMQ |
+| `AUTH_SECRET` | Yes | Auth.js session secret |
+| `ENCRYPTION_KEY` | Yes | 64-char hex (32 bytes) for encrypting payment/payout secrets |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Prod* | S3 + Rekognition (optional on EC2 with IAM role) |
+| `AWS_REGION` | Yes for AWS | e.g. `ap-south-1` |
+| `S3_BUCKET` | Yes | Upload bucket name |
+| `S3_ENDPOINT` | Local only | e.g. `http://localhost:9000` for MinIO |
+| `FACE_PROVIDER` | No | `aws` (default) or `mock` for local dev |
+| `RAZORPAY_PLATFORM_KEY` | No | Optional platform-level Razorpay key |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Push | Web Push credentials |
+| `NEXT_PUBLIC_APP_URL` / `NEXTAUTH_URL` | Yes | App URL (e.g. `http://localhost:3000`) |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Optional | Campus location map picker |
+| `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` | Optional | Google Maps Map ID for the picker |
+
+\* On EC2, prefer an instance IAM role instead of long-lived access keys.
+
+**Per-school secrets (not in `.env`):** fee provider keys (Razorpay, PhonePe, PayPal, Stripe) and RazorpayX payout credentials are configured in **Admin → Settings**. Use test keys (e.g. `rzp_test_*`) for local demos.
 
 ## Face Recognition (AWS Rekognition)
 
@@ -188,7 +223,7 @@ Hackathon / jury testing usually stays within free tier or costs only a few doll
 5. Click **Start Camera**, allow location, then **Submit Attendance**.
 6. Wait for status to change from `PROCESSING` → `PRESENT`.
 
-**Geofence note:** Seeded demo school is at Bangalore (`12.9716, 77.5946`, 500 m radius). If testing from elsewhere, update campus location in **Admin → Settings** or increase the campus radius temporarily.
+**Geofence note:** Seeded demo school is at Bangalore (`12.9716, 77.5946`, 500 m radius). If testing from elsewhere, update campus location in **Admin → Settings** (map picker needs Google Maps env vars) or increase the campus radius temporarily.
 
 ### Troubleshooting
 
@@ -200,20 +235,27 @@ Hackathon / jury testing usually stays within free tier or costs only a few doll
 | Blocked by geofence | Update school campus coords/radius in admin settings |
 | Using mock locally | Set `FACE_PROVIDER=mock` in `.env` |
 
-## Deployment (Railway / Fly.io / AWS)
+## Fees & Payments
 
-Deploy **two services** from the same repo:
+Parents pay fees from `/parent/fees`. Each school enables providers in **Admin → Settings**:
 
-1. **Web:** `npm run build && npm start`
-2. **Worker:** `npm run worker` (required for face verification, notifications, payroll jobs)
+| Provider | Typical use |
+|----------|-------------|
+| Razorpay | India — UPI, cards, net banking (`rzp_test_*` for test mode) |
+| PhonePe | India — UPI / wallet |
+| PayPal | International |
+| Stripe | Global card checkout |
 
-Add managed PostgreSQL and Redis. For face recognition on AWS EC2, attach an IAM role with Rekognition access and set `FACE_PROVIDER=aws`.
+Secrets are encrypted at rest with `ENCRYPTION_KEY`. Webhooks live under `/api/webhooks/{provider}/[schoolId]`.
 
-## PWA Notes
+## Payroll & Payouts
 
-- Install via browser "Add to Home Screen"
-- iOS Safari: camera/geolocation work in installed PWA; background push is limited
-- Offline page at `/offline`; attendance syncs via Background Sync API when available
+School admins manage employees at `/admin/employees` and payroll at `/admin/employees/payroll`.
+
+- Salary components and bank accounts must be complete before payout readiness passes
+- Optional **RazorpayX** auto-payouts are configured per school (not via root `.env`)
+- Teachers/staff view slips under `/teacher/payroll` or `/staff/payroll`
+- Worker processes payout jobs — keep `npm run worker` running
 
 ## Timetable & Scheduling
 
@@ -228,7 +270,23 @@ The timetable module follows a strict sequential setup before generation:
 Generation is blocked until all readiness checks pass (`src/lib/scheduler/readiness.ts`). The solver uses CSP backtracking with MRV ordering to enforce teacher/section overlap prevention, exact weekly period counts, and weekly free-period limits (max free/week, plus an optional min free/week that defaults to 1).
 
 Setup wizard: `/admin/schedule/setup`  
-View generated timetable: `/admin/schedule`
+View generated timetable: `/admin/schedule`  
+Teacher swaps: `/teacher/schedule/swaps`
+
+## Deployment (Railway / Fly.io / AWS)
+
+Deploy **two services** from the same repo:
+
+1. **Web:** `npm run build && npm start`
+2. **Worker:** `npm run worker` (required for face verification, notifications, payroll jobs)
+
+Add managed PostgreSQL and Redis. For face recognition on AWS EC2, attach an IAM role with Rekognition access and set `FACE_PROVIDER=aws`. Point `S3_*` at a real bucket (not MinIO) in production.
+
+## PWA Notes
+
+- Install via browser "Add to Home Screen"
+- iOS Safari: camera/geolocation work in installed PWA; background push is limited
+- Offline page at `/offline`; attendance syncs via Background Sync API when available
 
 ## Project Structure
 
@@ -237,7 +295,7 @@ src/
 ├── app/           # Route groups per role portal
 ├── actions/       # Server Actions
 ├── components/    # UI components
-├── lib/           # Auth, RBAC, DB, scheduler, payments, etc.
+├── lib/           # Auth, RBAC, DB, scheduler, payments, payroll, face, etc.
 ├── workers/       # BullMQ worker process
 └── middleware.ts  # Auth + route protection
 prisma/
