@@ -38,6 +38,19 @@ export async function getPresignedUploadUrl(key: string, contentType: string) {
   return getSignedUrl(client, command, { expiresIn: 3600 });
 }
 
+export async function putObject(key: string, body: Buffer, contentType: string) {
+  const client = getS3Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: getBucket(),
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+  return key;
+}
+
 export async function getPresignedDownloadUrl(key: string) {
   const client = getS3Client();
   const command = new GetObjectCommand({

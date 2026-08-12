@@ -189,9 +189,15 @@ export async function createEmployeeAction(input: z.infer<typeof createEmployeeS
     });
 
     await tx.userSchoolMembership.upsert({
-      where: { userId_schoolId: { userId: user.id, schoolId: ctx.schoolId } },
+      where: {
+        userId_schoolId_role: {
+          userId: user.id,
+          schoolId: ctx.schoolId,
+          role: platformRole,
+        },
+      },
       create: { userId: user.id, schoolId: ctx.schoolId, role: platformRole },
-      update: { role: platformRole, isActive: true },
+      update: { isActive: true },
     });
 
     return tx.employee.create({
@@ -250,22 +256,66 @@ export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeS
     }
 
     if (data.jobType && data.jobType !== existing.jobType) {
+      const oldPlatformRole = getPlatformRoleForJobType(existing.jobType);
       const platformRole = getPlatformRoleForJobType(data.jobType);
-      await tx.userSchoolMembership.update({
-        where: { userId_schoolId: { userId: existing.userId, schoolId: ctx.schoolId } },
-        data: { role: platformRole },
-      });
+
+      if (oldPlatformRole !== platformRole) {
+        await tx.userSchoolMembership.updateMany({
+          where: {
+            userId: existing.userId,
+            schoolId: ctx.schoolId,
+            role: oldPlatformRole,
+          },
+          data: { isActive: false },
+        });
+        await tx.userSchoolMembership.upsert({
+          where: {
+            userId_schoolId_role: {
+              userId: existing.userId,
+              schoolId: ctx.schoolId,
+              role: platformRole,
+            },
+          },
+          create: {
+            userId: existing.userId,
+            schoolId: ctx.schoolId,
+            role: platformRole,
+          },
+          update: { isActive: true },
+        });
+      }
     }
 
     if (data.employmentStatus === "TERMINATED") {
-      await tx.userSchoolMembership.update({
-        where: { userId_schoolId: { userId: existing.userId, schoolId: ctx.schoolId } },
+      const platformRole = getPlatformRoleForJobType(
+        data.jobType ?? existing.jobType,
+      );
+      await tx.userSchoolMembership.updateMany({
+        where: {
+          userId: existing.userId,
+          schoolId: ctx.schoolId,
+          role: platformRole,
+        },
         data: { isActive: false },
       });
     } else if (data.employmentStatus === "ACTIVE") {
-      await tx.userSchoolMembership.update({
-        where: { userId_schoolId: { userId: existing.userId, schoolId: ctx.schoolId } },
-        data: { isActive: true },
+      const platformRole = getPlatformRoleForJobType(
+        data.jobType ?? existing.jobType,
+      );
+      await tx.userSchoolMembership.upsert({
+        where: {
+          userId_schoolId_role: {
+            userId: existing.userId,
+            schoolId: ctx.schoolId,
+            role: platformRole,
+          },
+        },
+        create: {
+          userId: existing.userId,
+          schoolId: ctx.schoolId,
+          role: platformRole,
+        },
+        update: { isActive: true },
       });
     }
 
@@ -347,7 +397,7 @@ export async function upsertEmployeeSalaryAction(input: z.infer<typeof salarySch
 
 export async function upsertEmployeeBankAccountAction(input: z.infer<typeof bankAccountSchema>) {
   const ctx = await requireSchoolPermission(PERMISSIONS.EMPLOYEES_MANAGE);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
   const data = bankAccountSchema.parse(input);
 
   if (!validateIfsc(data.ifsc)) throw new Error("Invalid IFSC code");
@@ -411,7 +461,7 @@ export async function upsertEmployeeBankAccountAction(input: z.infer<typeof bank
 
 export async function verifyEmployeeBankAccountAction(employeeId: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.BANK_DETAILS_VIEW);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
 
   await withTenantContext(ctx.schoolId, async (tx) => {
     const account = await tx.employeeBankAccount.findFirst({

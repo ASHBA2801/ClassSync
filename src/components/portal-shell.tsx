@@ -14,9 +14,10 @@ interface PortalShellProps {
   navItems: NavItem[];
   children: React.ReactNode;
   userName?: string;
+  headerExtra?: React.ReactNode;
 }
 
-export function PortalShell({ title, navItems, children, userName }: PortalShellProps) {
+export function PortalShell({ title, navItems, children, userName, headerExtra }: PortalShellProps) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -112,7 +113,10 @@ export function PortalShell({ title, navItems, children, userName }: PortalShell
             <h1 className="text-base font-semibold tracking-tight text-text-1 text-shadow-sm">{title}</h1>
           </div>
 
-          <ProfileMenu fallbackName={userName} />
+          <div className="flex items-center gap-2 sm:gap-3">
+            {headerExtra}
+            <ProfileMenu fallbackName={userName} />
+          </div>
         </header>
 
         <main className="flex-1 p-4 lg:p-8">

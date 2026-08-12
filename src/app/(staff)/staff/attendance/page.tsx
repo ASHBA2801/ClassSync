@@ -1,4 +1,5 @@
 import { PortalShell } from "@/components/portal-shell";
+import { getFaceEnrollmentStatusAction } from "@/actions/attendance";
 import { getEmployeeForCurrentUserAction } from "@/actions/employees";
 import { listStaffAttendanceAction } from "@/actions/staff-modules";
 import { getStaffNavForJobType } from "@/lib/employees/capabilities";
@@ -14,11 +15,14 @@ export default async function StaffAttendancePage() {
   if (!employee) redirect("/login");
 
   const nav = getStaffNavForJobType(employee.jobType);
-  const records = await listStaffAttendanceAction();
+  const [records, enrollment] = await Promise.all([
+    listStaffAttendanceAction(),
+    getFaceEnrollmentStatusAction(),
+  ]);
 
   return (
     <PortalShell title="Attendance" navItems={nav} userName={ctx.name}>
-      <StaffAttendancePanel records={records} />
+      <StaffAttendancePanel records={records} faceEnrolled={enrollment.enrolled} />
     </PortalShell>
   );
 }

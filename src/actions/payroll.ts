@@ -131,7 +131,7 @@ export async function generateMonthlyPayrollAction(input: z.infer<typeof monthly
 
 export async function startPayrollPayoutAction(payrollRunId: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.PAYROLL_EXECUTE);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
 
   const result = await startPayrollPayoutForSchool(ctx.schoolId, payrollRunId, ctx.userId);
 
@@ -155,7 +155,7 @@ export async function syncPayrollPayoutStatusesAction(payrollRunId: string) {
 
 export async function retryFailedPayrollPayoutsAction(payrollRunId: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.PAYROLL_EXECUTE);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
 
   const result = await retryFailedPayrollPayouts(ctx.schoolId, payrollRunId, ctx.userId);
 
@@ -180,7 +180,7 @@ export async function getPendingManualPayrollReminderAction() {
 
 export async function approvePayrollRunAction(payrollRunId: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.PAYROLL_APPROVE);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
 
   await withTenantContext(ctx.schoolId, async (tx) => {
     const run = await tx.payrollRun.findFirst({
@@ -214,7 +214,7 @@ export async function approvePayrollRunAction(payrollRunId: string) {
 
 export async function executePayrollRunAction(payrollRunId: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.PAYROLL_EXECUTE);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
 
   const result = await executePayrollPayouts(ctx.schoolId, payrollRunId, ctx.userId);
 
@@ -226,7 +226,7 @@ export async function executePayrollRunAction(payrollRunId: string) {
 
 export async function markPayoutPaidManuallyAction(payoutId: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.PAYROLL_EXECUTE);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
 
   await withTenantContext(ctx.schoolId, async (tx) => {
     const payout = await tx.salaryPayout.findFirst({

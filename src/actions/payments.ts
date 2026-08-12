@@ -246,7 +246,7 @@ export async function listFeeInvoicesForParentAction() {
 
 export async function createPaymentOrderAction(invoiceId: string, provider: PaymentProvider) {
   const ctx = await requireSchoolPermission(PERMISSIONS.FEES_PAY);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
 
   const invoice = await prisma.feeInvoice.findFirst({
     where: { id: invoiceId, schoolId: ctx.schoolId },

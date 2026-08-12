@@ -46,7 +46,7 @@ export async function getPayoutConfigAction() {
 
 export async function savePayoutConfigAction(input: z.infer<typeof payoutConfigSchema>) {
   const ctx = await requireSchoolPermission(PERMISSIONS.PAYOUTS_CONFIGURE);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
   const data = payoutConfigSchema.parse(input);
 
   if (data.autoPayoutEnabled && !data.isEnabled) {

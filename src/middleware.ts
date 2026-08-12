@@ -28,6 +28,22 @@ export default auth((req) => {
   }
 
   const role = session.user.role;
+  const needsContext = session.user.needsContext === true;
+
+  // Context picker is always reachable while authenticated
+  if (pathname.startsWith("/select-context")) {
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/account")) {
+    // Still allow account while needsContext so they can sign out / change password
+    return NextResponse.next();
+  }
+
+  if (needsContext) {
+    return NextResponse.redirect(new URL("/select-context", req.url));
+  }
+
   const allowedPrefixes = roleRoutes[role] ?? [];
 
   if (pathname === "/") {
@@ -39,10 +55,6 @@ export default auth((req) => {
       PARENT: "/parent",
     };
     return NextResponse.redirect(new URL(dashboardMap[role] ?? "/login", req.url));
-  }
-
-  if (pathname.startsWith("/account")) {
-    return NextResponse.next();
   }
 
   const hasAccess =

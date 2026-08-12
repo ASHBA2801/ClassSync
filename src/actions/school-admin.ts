@@ -29,9 +29,15 @@ export async function createSchoolUserAction(input: z.infer<typeof createUserSch
     });
 
     await tx.userSchoolMembership.upsert({
-      where: { userId_schoolId: { userId: created.id, schoolId: ctx.schoolId } },
+      where: {
+        userId_schoolId_role: {
+          userId: created.id,
+          schoolId: ctx.schoolId,
+          role: data.role,
+        },
+      },
       create: { userId: created.id, schoolId: ctx.schoolId, role: data.role },
-      update: { role: data.role, isActive: true },
+      update: { isActive: true },
     });
 
     return created;
@@ -430,9 +436,23 @@ export async function linkGuardianAction(parentId: string, studentId: string, re
   const ctx = await requireSchoolPermission(PERMISSIONS.STUDENTS_MANAGE);
 
   return withTenantContext(ctx.schoolId, async (tx) => {
-    return tx.guardianRelationship.create({
+    const relationship = await tx.guardianRelationship.create({
       data: { schoolId: ctx.schoolId, parentId, studentId, relation },
     });
+
+    await tx.userSchoolMembership.upsert({
+      where: {
+        userId_schoolId_role: {
+          userId: parentId,
+          schoolId: ctx.schoolId,
+          role: "PARENT",
+        },
+      },
+      create: { userId: parentId, schoolId: ctx.schoolId, role: "PARENT" },
+      update: { isActive: true },
+    });
+
+    return relationship;
   });
 }
 

@@ -30,13 +30,17 @@ export class MockFaceRecognitionProvider implements FaceRecognitionProvider {
   }
 }
 
+/** Singleton so enroll + verify in the same Node process share state (mock only). */
+let mockProvider: MockFaceRecognitionProvider | null = null;
+
 /**
  * Cloud face recognition via AWS Rekognition (default).
  * Set FACE_PROVIDER=mock for local dev without AWS credentials.
  */
 export function getFaceRecognitionProvider(): FaceRecognitionProvider {
   if (process.env.FACE_PROVIDER === "mock") {
-    return new MockFaceRecognitionProvider();
+    if (!mockProvider) mockProvider = new MockFaceRecognitionProvider();
+    return mockProvider;
   }
   return new AwsRekognitionProvider();
 }

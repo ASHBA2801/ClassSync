@@ -1,28 +1,34 @@
-import { PortalShell } from "@/components/portal-shell";
+import { ParentPortalShell } from "@/components/parent-portal-shell";
 import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
-import { getLinkedStudentsAction } from "@/actions/parent";
+import { getAllLinkedChildrenAction, getLinkedStudentsAction } from "@/actions/parent";
 import { listFeeInvoicesForParentAction } from "@/actions/payments";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { parentNav } from "@/lib/nav-config";
 import { User, CreditCard, CheckCircle2 } from "lucide-react";
+import { SwitchChildButton } from "./switch-child-button";
+import { cn } from "@/lib/utils";
 
 export default async function ParentDashboardPage() {
   const ctx = await getSessionContext();
   if (!ctx || ctx.role !== "PARENT") redirect("/login");
 
-  const [students, invoices] = await Promise.all([
+  const [students, allChildren, invoices] = await Promise.all([
     getLinkedStudentsAction(),
+    getAllLinkedChildrenAction(),
     listFeeInvoicesForParentAction(),
   ]);
 
   const pendingInvoices = invoices.filter((i) => i.status !== "PAID");
   const totalPending = pendingInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
+  const activeStudentId = ctx.activeStudentId;
+
+  const otherSchoolChildren = allChildren.filter((c) => c.schoolId !== ctx.schoolId);
 
   return (
-    <PortalShell title="Parent Portal" navItems={parentNav} userName={ctx.name}>
+    <ParentPortalShell title="Parent Portal" navItems={parentNav} userName={ctx.name}>
       <div className="space-y-6">
         <Card>
           <CardHeader>
@@ -30,18 +36,57 @@ export default async function ParentDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-2">
-              {students.map((s) => (
-                <div key={s.id} className="glass-nested flex items-center gap-3 p-4">
-                  <div className="icon-ring h-10 w-10 shrink-0">
-                    <User className="h-4 w-4 text-primary" />
+              {students.map((s) => {
+                const isActive = s.id === activeStudentId;
+                return (
+                  <div
+                    key={s.id}
+                    className={cn(
+                      "glass-nested flex items-center gap-3 p-4",
+                      isActive && "ring-1 ring-primary/40",
+                    )}
+                  >
+                    <div className="icon-ring h-10 w-10 shrink-0">
+                      <User className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-text-1 text-shadow-sm">{s.name}</p>
+                      <p className="text-xs text-text-2">{s.classSection?.name ?? "Unassigned"}</p>
+                    </div>
+                    {isActive && <Badge variant="success">Active</Badge>}
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-text-1 text-shadow-sm">{s.name}</p>
-                    <p className="text-xs text-text-2">{s.classSection?.name ?? "Unassigned"}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+
+            {otherSchoolChildren.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-text-3">
+                  Other schools
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {otherSchoolChildren.map((c) => (
+                    <div key={c.studentId} className="glass-nested flex items-center gap-3 p-4">
+                      <div className="icon-ring h-10 w-10 shrink-0">
+                        <User className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-text-1">{c.studentName}</p>
+                        <p className="text-xs text-text-2">
+                          {c.schoolName}
+                          {c.classSectionName ? ` · ${c.classSectionName}` : ""}
+                        </p>
+                      </div>
+                      <SwitchChildButton
+                        schoolId={c.schoolId}
+                        studentId={c.studentId}
+                        label="View"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -96,6 +141,6 @@ export default async function ParentDashboardPage() {
           </CardContent>
         </Card>
       </div>
-    </PortalShell>
+    </ParentPortalShell>
   );
 }

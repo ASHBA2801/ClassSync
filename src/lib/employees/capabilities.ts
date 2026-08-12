@@ -62,7 +62,8 @@ export function getStaffNavForJobType(jobType: EmployeeJobType): NavItem[] {
     nav.push({ href: "/staff/transport", label: "Transport", icon: "calendar" });
   }
   if (caps.includes(CAPABILITIES.SECURITY_VISITOR_LOG)) {
-    nav.push({ href: "/staff/security", label: "Visitor Log", icon: "clipboard-check" });
+    nav.push({ href: "/staff/security", label: "Entry Check-In", icon: "clipboard-check" });
+    nav.push({ href: "/staff/security/logs", label: "Entry Logs", icon: "file-text" });
   }
   if (caps.includes(CAPABILITIES.CLEANER_ZONE_TASKS)) {
     nav.push({ href: "/staff/cleaning", label: "Cleaning Tasks", icon: "clipboard-check" });
