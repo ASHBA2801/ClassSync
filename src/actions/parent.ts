@@ -1,8 +1,8 @@
 "use server";
 
 import { z } from "zod";
-import { prisma, withTenantContext } from "@/lib/db/prisma";
-import { requireSchoolContext, requireSchoolPermission } from "@/lib/rbac/guard";
+import { prisma, withTenantContext, withSystemAdminContext } from "@/lib/db/prisma";
+import { requireSchoolContext, requireSchoolPermission, requireAuth } from "@/lib/rbac/guard";
 import { ForbiddenError } from "@/lib/errors";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { getPresignedUploadUrl, buildS3Key } from "@/lib/storage/s3";
@@ -11,6 +11,7 @@ import { applyLeaveSubstitutions } from "@/lib/scheduler/smart-scheduler";
 import { parseIsoDate } from "@/lib/calendar/working-days";
 import { isoDateString } from "@/lib/schemas/date";
 
+/** Children linked in the active school (tenant-scoped portal data). */
 export async function getLinkedStudentsAction() {
   const ctx = await requireSchoolContext();
 
@@ -28,6 +29,34 @@ export async function getLinkedStudentsAction() {
       },
     });
     return relationships.map((r) => r.student);
+  });
+}
+
+/** All children across schools for switchers (bypasses tenant RLS). */
+export async function getAllLinkedChildrenAction() {
+  const ctx = await requireAuth();
+
+  return withSystemAdminContext(async (tx) => {
+    const relationships = await tx.guardianRelationship.findMany({
+      where: { parentId: ctx.userId },
+      include: {
+        student: {
+          include: {
+            classSection: { select: { name: true } },
+            school: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return relationships.map((r) => ({
+      studentId: r.student.id,
+      studentName: r.student.name,
+      schoolId: r.student.schoolId,
+      schoolName: r.student.school.name,
+      classSectionName: r.student.classSection?.name ?? null,
+    }));
   });
 }
 

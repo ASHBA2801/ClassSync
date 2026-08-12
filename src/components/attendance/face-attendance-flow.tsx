@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { FaceAttendanceSubmitResult } from "@/lib/attendance/face-attendance";
@@ -15,39 +15,72 @@ type FaceAttendanceActions = {
   enrollFace: (imageBase64: string) => Promise<void>;
 };
 
-export function FaceAttendanceFlow({ actions }: { actions: FaceAttendanceActions }) {
+type Mode = "enroll" | "attendance";
+
+export function FaceAttendanceFlow({
+  actions,
+  initiallyEnrolled = false,
+  canMarkAttendance = true,
+}: {
+  actions: FaceAttendanceActions;
+  initiallyEnrolled?: boolean;
+  canMarkAttendance?: boolean;
+}) {
+  const [faceEnrolled, setFaceEnrolled] = useState(initiallyEnrolled);
+  const [mode, setMode] = useState<Mode>(initiallyEnrolled ? "attendance" : "enroll");
   const [status, setStatus] = useState<string>("idle");
   const [message, setMessage] = useState("");
   const [attemptNumber, setAttemptNumber] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+
+  const stopCamera = useCallback(() => {
+    setStream((prev) => {
+      prev?.getTracks().forEach((t) => t.stop());
+      return null;
+    });
+    setCameraReady(false);
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }, []);
+
+  useEffect(() => () => stopCamera(), [stopCamera]);
 
   const startCamera = useCallback(async () => {
+    setMessage("");
+    setCameraReady(false);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = mediaStream;
+        await video.play().catch(() => undefined);
+        const markReady = () => setCameraReady(true);
+        if (video.readyState >= 2) markReady();
+        else video.onloadeddata = markReady;
       }
     } catch {
-      setMessage("Camera access denied. Please allow camera permissions.");
+      setStatus("error");
+      setMessage("Camera access denied. Allow camera permission and try again.");
     }
   }, []);
 
   const captureImage = useCallback((): string | undefined => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas) return undefined;
+    if (!video || !canvas || video.videoWidth === 0) return undefined;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) return undefined;
     ctx.drawImage(video, 0, 0);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-    return dataUrl.split(",")[1];
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const base64 = dataUrl.split(",")[1];
+    return base64 && base64.length > 100 ? base64 : undefined;
   }, []);
 
   async function pollStatus(id: string) {
@@ -63,7 +96,45 @@ export function FaceAttendanceFlow({ actions }: { actions: FaceAttendanceActions
     setMessage("Still processing... check back shortly.");
   }
 
+  async function handleEnroll() {
+    setStatus("loading");
+    setMessage("Capturing and enrolling your face…");
+    const imageBase64 = captureImage();
+    if (!imageBase64) {
+      setStatus("error");
+      setMessage("Could not capture a photo. Start the camera, wait a moment, then try again.");
+      return;
+    }
+
+    try {
+      await actions.enrollFace(imageBase64);
+      setFaceEnrolled(true);
+      setStatus("enrolled");
+      setMessage("Face enrolled successfully. You can mark attendance now.");
+      setMode("attendance");
+    } catch (err) {
+      setStatus("error");
+      const raw = err instanceof Error ? err.message : "Enrollment failed";
+      if (/security token|UnrecognizedClient|credentials|AccessDenied/i.test(raw)) {
+        setMessage(
+          "AWS credentials are invalid. Fix AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, or set FACE_PROVIDER=mock for local testing.",
+        );
+      } else if (/No face detected/i.test(raw)) {
+        setMessage("No face detected. Face the camera with good lighting and try again.");
+      } else {
+        setMessage(raw);
+      }
+    }
+  }
+
   async function handleSubmit() {
+    if (!faceEnrolled) {
+      setStatus("error");
+      setMessage("Enroll your face first (one-time), then mark attendance.");
+      setMode("enroll");
+      return;
+    }
+
     setStatus("loading");
     setMessage("");
 
@@ -76,6 +147,11 @@ export function FaceAttendanceFlow({ actions }: { actions: FaceAttendanceActions
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const imageBase64 = captureImage();
+        if (!imageBase64) {
+          setStatus("error");
+          setMessage("Could not capture a photo. Start the camera first.");
+          return;
+        }
         try {
           const result = await actions.submit({
             geoLat: position.coords.latitude,
@@ -103,50 +179,128 @@ export function FaceAttendanceFlow({ actions }: { actions: FaceAttendanceActions
       },
       () => {
         setStatus("error");
-        setMessage("GPS location required for attendance");
+        setMessage("GPS location is required to mark attendance (not for enrollment).");
       },
       { enableHighAccuracy: true },
     );
   }
 
-  async function handleEnrollFace() {
-    await startCamera();
-    setTimeout(async () => {
-      const imageBase64 = captureImage();
-      if (imageBase64) {
-        await actions.enrollFace(imageBase64);
-        setMessage("Face enrolled successfully");
-      }
-    }, 2000);
-  }
-
   return (
     <div className="mx-auto max-w-lg space-y-4">
       <Card>
-        <CardHeader><CardTitle>Face Enrollment (one-time)</CardTitle></CardHeader>
-        <CardContent>
-          <Button onClick={handleEnrollFace} variant="outline" className="mb-4">
-            Enroll Face
-          </Button>
+        <CardHeader>
+          <CardTitle>
+            {faceEnrolled ? "Face enrolled" : "Step 1 — Enroll your face (one-time)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {faceEnrolled ? (
+            <p className="text-sm text-success">
+              Your face is registered. Use Mark Attendance below each day.
+            </p>
+          ) : (
+            <p className="text-sm text-text-2">
+              Enrollment only needs the camera — no GPS. Start the camera, face it clearly, then
+              tap Capture &amp; Enroll.
+            </p>
+          )}
+
+          {!faceEnrolled && (
+            <div className="flex flex-wrap gap-2">
+              {!stream ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setMode("enroll");
+                    startCamera();
+                  }}
+                >
+                  Start Camera
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={handleEnroll}
+                  disabled={status === "loading" || !cameraReady}
+                >
+                  {status === "loading" && mode === "enroll"
+                    ? "Enrolling…"
+                    : cameraReady
+                      ? "Capture & Enroll"
+                      : "Camera warming up…"}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {faceEnrolled && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setMode("enroll");
+                setFaceEnrolled(false);
+                setMessage("Re-enrollment mode. Capture a new photo.");
+                startCamera();
+              }}
+            >
+              Re-enroll face
+            </Button>
+          )}
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Mark Attendance</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Step 2 — Mark Attendance</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-4">
-          <video ref={videoRef} autoPlay playsInline className="w-full rounded-[var(--radius-sm)] bg-black/40" />
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="aspect-video w-full rounded-[var(--radius-sm)] bg-black/40 object-cover"
+          />
           <canvas ref={canvasRef} className="hidden" />
 
-          {!stream && (
-            <Button onClick={startCamera} variant="outline">Start Camera</Button>
+          {!stream && faceEnrolled && canMarkAttendance && (
+            <Button type="button" onClick={startCamera} variant="outline">
+              Start Camera
+            </Button>
           )}
 
-          <Button onClick={handleSubmit} disabled={status === "loading"} className="w-full">
-            {status === "loading" ? "Submitting..." : "Submit Attendance"}
-          </Button>
+          {canMarkAttendance ? (
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={status === "loading" || !faceEnrolled || !cameraReady}
+              className="w-full"
+            >
+              {!faceEnrolled
+                ? "Enroll face first"
+                : status === "loading" && mode === "attendance"
+                  ? "Submitting…"
+                  : !cameraReady
+                    ? "Start camera first"
+                    : "Submit Attendance"}
+            </Button>
+          ) : (
+            <p className="text-sm text-text-2">Attendance for today is already recorded.</p>
+          )}
 
           {message && (
-            <p className={`text-sm ${status === "PRESENT" ? "text-success" : status === "blocked" || status === "error" ? "text-danger" : "text-text-2"}`}>
+            <p
+              className={`text-sm ${
+                status === "PRESENT" || status === "enrolled"
+                  ? "text-success"
+                  : status === "blocked" || status === "error"
+                    ? "text-danger"
+                    : "text-text-2"
+              }`}
+            >
               {message}
             </p>
           )}

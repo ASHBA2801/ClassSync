@@ -23,9 +23,21 @@ interface Student {
   name: string;
 }
 
-export function DocumentUploadForm({ students }: { students: Student[] }) {
+export function DocumentUploadForm({
+  students,
+  defaultStudentId,
+}: {
+  students: Student[];
+  defaultStudentId?: string;
+}) {
   const router = useRouter();
-  const [studentId, setStudentId] = useState("");
+  const [studentId, setStudentId] = useState(
+    () => defaultStudentId && students.some((s) => s.id === defaultStudentId)
+      ? defaultStudentId
+      : students.length === 1
+        ? students[0]!.id
+        : "",
+  );
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

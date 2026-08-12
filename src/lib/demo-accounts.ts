@@ -10,7 +10,7 @@ export const DEMO_ACCOUNTS = [
     password: "school123",
   },
   {
-    role: "Teacher",
+    role: "Teacher + Parent",
     email: "teacher@demo.com",
     password: "teacher123",
   },
@@ -30,7 +30,7 @@ export const DEMO_ACCOUNTS = [
     password: "staff123",
   },
   {
-    role: "Parent",
+    role: "Parent (2 schools)",
     email: "parent@demo.com",
     password: "parent123",
   },

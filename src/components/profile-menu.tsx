@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import {
+  ArrowLeftRight,
   ChevronDown,
   KeyRound,
   LogOut,
@@ -10,6 +12,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import { formatRoleLabel } from "@/lib/nav-config";
+import { listUserContextsAction } from "@/actions/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +40,23 @@ export function ProfileMenu({ fallbackName }: ProfileMenuProps) {
   const name = session?.user?.name ?? fallbackName ?? "Account";
   const email = session?.user?.email ?? "";
   const role = session?.user?.role ? formatRoleLabel(session.user.role) : "";
+  const [canSwitch, setCanSwitch] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const contexts = await listUserContextsAction();
+        if (cancelled) return;
+        setCanSwitch(contexts.hasMultiple);
+      } catch {
+        if (!cancelled) setCanSwitch(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, session?.user?.role]);
 
   return (
     <DropdownMenu>
@@ -73,6 +93,21 @@ export function ProfileMenu({ fallbackName }: ProfileMenuProps) {
         </DropdownMenuLabel>
 
         <DropdownMenuSeparator />
+
+        {canSwitch && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/select-context?switch=1"
+                className="flex cursor-pointer items-center gap-2"
+              >
+                <ArrowLeftRight className="h-4 w-4 text-text-2" />
+                Switch role
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
 
         <DropdownMenuItem asChild>
           <Link href="/account/profile" className="flex cursor-pointer items-center gap-2">
