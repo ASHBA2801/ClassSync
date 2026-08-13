@@ -63,30 +63,32 @@ export default async function MonitoringPage() {
           </Card>
         </div>
 
-        {/* Queue Health */}
+        {/* Worker Health */}
         <Card>
-          <CardHeader><CardTitle>Queue Health</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Worker Health</CardTitle></CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Queue</TableHead>
+                  <TableHead>Service</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Object.entries(monitoring.queueHealth).map(([name, count]) => (
-                  <TableRow key={name}>
-                    <TableCell className="font-medium">{name}</TableCell>
-                    <TableCell>
-                      {count >= 0 ? (
-                        <Badge variant={count === 0 ? "success" : "warning"}>{count} pending</Badge>
-                      ) : (
-                        <Badge variant="danger">Unavailable</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                <TableRow>
+                  <TableCell className="font-medium">Background worker</TableCell>
+                  <TableCell>
+                    {monitoring.workerHealth.up ? (
+                      <Badge variant="success">
+                        Up{monitoring.workerHealth.latencyMs !== undefined ? ` (${monitoring.workerHealth.latencyMs}ms)` : ""}
+                      </Badge>
+                    ) : (
+                      <Badge variant="danger">
+                        Unavailable{monitoring.workerHealth.error ? ` — ${monitoring.workerHealth.error}` : ""}
+                      </Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </CardContent>

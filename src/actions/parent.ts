@@ -7,6 +7,7 @@ import { ForbiddenError } from "@/lib/errors";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { getPresignedUploadUrl, buildS3Key } from "@/lib/storage/s3";
 import { enqueueNotification } from "@/lib/notifications";
+import { dispatchDocumentProcessing } from "@/lib/jobs/dispatch";
 import { applyLeaveSubstitutions } from "@/lib/scheduler/smart-scheduler";
 import { parseIsoDate } from "@/lib/calendar/working-days";
 import { isoDateString } from "@/lib/schemas/date";
@@ -115,25 +116,17 @@ export async function confirmDocumentUploadAction(input: z.infer<typeof confirmD
     return tx.document.create({ data: createData });
   });
 
-  // process document (OCR + extraction) asynchronously and update record
-  try {
-    const { processDocument } = await import("@/lib/ai/documentProcessor");
-    // run but don't block the response
-    processDocument({
-      s3Key: data.s3Key,
-      mimeType: data.mimeType,
-      documentId: created.id,
-      documentType: data.documentType,
-      uploaderType,
-      studentId: data.studentId,
-      schoolId: ctx.schoolId,
-      uploadedBy: ctx.userId,
-    }).catch((err) => {
-      console.error("Document processing failed:", err);
-    });
-  } catch (err) {
-    console.error("Failed to import document processor", err);
-  }
+  // Process document (OCR + extraction) on the worker service, deferred until after the response.
+  dispatchDocumentProcessing({
+    s3Key: data.s3Key,
+    mimeType: data.mimeType,
+    documentId: created.id,
+    documentType: data.documentType,
+    uploaderType,
+    studentId: data.studentId,
+    schoolId: ctx.schoolId,
+    uploadedBy: ctx.userId,
+  });
 
   return created;
 }

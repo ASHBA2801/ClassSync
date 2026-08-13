@@ -1,15 +1,10 @@
 import webpush from "web-push";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getNotificationsQueue } from "@/lib/queue/queues";
+import { dispatchNotification } from "@/lib/jobs/dispatch";
+import type { NotificationJobPayload } from "@/lib/jobs/types";
 
-export interface NotificationPayload {
-  schoolId: string;
-  userId: string;
-  title: string;
-  body: string;
-  metadata?: Record<string, unknown>;
-}
+export type NotificationPayload = NotificationJobPayload;
 
 function configureWebPush() {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
@@ -20,12 +15,22 @@ function configureWebPush() {
   }
 }
 
+/** True inside the standalone worker process (set via WORKER_ROLE=worker). */
+function isWorkerProcess() {
+  return process.env.WORKER_ROLE === "worker";
+}
+
+/**
+ * Fire-and-forget notification. From the web app this dispatches to the
+ * worker service over HTTP so the caller isn't blocked; inside the worker
+ * itself it sends immediately, avoiding an unnecessary HTTP round trip.
+ */
 export async function enqueueNotification(payload: NotificationPayload) {
-  const queue = getNotificationsQueue();
-  await queue.add("send", payload, {
-    attempts: 3,
-    backoff: { type: "exponential", delay: 2000 },
-  });
+  if (isWorkerProcess()) {
+    await sendNotification(payload);
+    return;
+  }
+  dispatchNotification(payload);
 }
 
 export async function sendNotification(payload: NotificationPayload) {

@@ -5,7 +5,29 @@ import { prisma } from "@/lib/db/prisma";
 import { requireRole } from "@/lib/rbac/guard";
 import { encrypt } from "@/lib/encryption";
 import { createAuditLog } from "@/lib/audit";
-import { getRedis, QUEUE_NAMES } from "@/lib/queue/redis";
+
+interface WorkerHealth {
+  up: boolean;
+  latencyMs?: number;
+  error?: string;
+}
+
+async function checkWorkerHealth(): Promise<WorkerHealth> {
+  const url = process.env.WORKER_URL;
+  if (!url) return { up: false, error: "WORKER_URL not configured" };
+
+  const started = Date.now();
+  try {
+    const res = await fetch(`${url.replace(/\/$/, "")}/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return { up: false, error: `HTTP ${res.status}` };
+    return { up: true, latencyMs: Date.now() - started };
+  } catch (err) {
+    return { up: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 
 const aiKeySchema = z.object({
   provider: z.string(),
@@ -86,17 +108,7 @@ export async function getPlatformMonitoringAction() {
     prisma.notificationLog.count({ where: { status: "FAILED" } }),
   ]);
 
-  let queueHealth: Record<string, number> = {};
-  try {
-    const redis = getRedis();
-    for (const name of Object.values(QUEUE_NAMES)) {
-      const waiting = await redis.llen(`bull:${name}:wait`);
-      const failed = await redis.llen(`bull:${name}:failed`);
-      queueHealth[name] = waiting + failed;
-    }
-  } catch {
-    queueHealth = { error: -1 };
-  }
+  const workerHealth = await checkWorkerHealth();
 
   return {
     schoolCount,
@@ -104,7 +116,7 @@ export async function getPlatformMonitoringAction() {
     escalatedAttendance,
     failedPayments,
     failedNotifications,
-    queueHealth,
+    workerHealth,
   };
 }
 

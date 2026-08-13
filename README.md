@@ -1,6 +1,6 @@
 # ClassSync — Multi-Tenant School ERP
 
-A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, PostgreSQL RLS, Auth.js, BullMQ, and multi-provider payments.
+A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, PostgreSQL RLS, Auth.js, a standalone Hono worker service, and multi-provider payments.
 
 ## Features
 
@@ -14,7 +14,7 @@ A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, 
 - **Parent portal** for documents, leave requests, and fee payments
 - **Multi-provider fee payments** — Razorpay, PhonePe, PayPal, Stripe (per-tenant encrypted keys)
 - **PWA** with service worker, offline fallback, background sync for attendance
-- **BullMQ workers** for face verification, notifications, document AI, and payroll jobs
+- **Standalone worker service** (HTTP, not a queue consumer) for face verification, notifications, document AI, scheduling, and payroll jobs — deployable independently of the web app on Cloud Run or a second Vercel project
 - **Campus map picker** via Google Maps (optional; used in Admin → Settings)
 
 ## Tech Stack
@@ -22,7 +22,8 @@ A multi-tenant, RBAC-secured School ERP platform built with Next.js 16, Prisma, 
 - Next.js 16 (App Router) + TypeScript + Tailwind v4
 - Auth.js v5 (JWT sessions with tenantId, role, permissions)
 - Prisma + PostgreSQL with RLS
-- BullMQ + Redis
+- Hono worker service (HTTP) — runs standalone on Node, deployable to Cloud Run or Vercel
+- Redis (rate limiting/idempotency in the web app only — no longer a job queue)
 - AWS S3 + Rekognition (cloud face recognition for attendance)
 - Razorpay / PhonePe / PayPal / Stripe (per-tenant fee providers)
 - RazorpayX (optional staff salary payouts)
@@ -45,8 +46,8 @@ npm run db:push
 npm run db:rls
 npm run db:seed
 
-npm run dev           # :3000
-npm run worker        # separate terminal
+npm run dev           # web app on :3000
+npm run worker        # worker service on :3001 (separate terminal)
 ```
 
 Docker services:
@@ -80,7 +81,7 @@ npm run db:seed   # Seed demo data + permissions
 
 ```bash
 npm run dev       # Next.js app on :3000
-npm run worker    # BullMQ workers (separate terminal)
+npm run worker    # Worker service on :3001 (separate terminal)
 ```
 
 ### Demo Accounts (after seed)
@@ -109,36 +110,39 @@ Copy from `.env.example` (manual) or `.env.docker` (Docker Compose + MinIO + moc
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `REDIS_URL` | Yes | Redis for BullMQ |
-| `AUTH_SECRET` | Yes | Auth.js session secret |
-| `ENCRYPTION_KEY` | Yes | 64-char hex (32 bytes) for encrypting payment/payout secrets |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Prod* | S3 + Rekognition (optional on EC2 with IAM role) |
+| `DATABASE_URL` | Yes (web + worker) | PostgreSQL connection string |
+| `REDIS_URL` | Yes (web only) | Rate limiting / idempotency — no longer a job queue |
+| `WORKER_URL` | Yes (web only) | Base URL of the deployed worker service (e.g. `https://classsync-worker-xyz.a.run.app`) |
+| `WORKER_SECRET` | Yes (web + worker) | Shared bearer token — must match on both deployments |
+| `WORKER_ROLE` | Worker only | Set to `worker` on the worker deployment (`npm run worker` sets this automatically) |
+| `AUTH_SECRET` | Web only | Auth.js session secret |
+| `ENCRYPTION_KEY` | Yes (web + worker) | 64-char hex (32 bytes) for encrypting payment/payout secrets |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes (web + worker) | S3 + Rekognition — required explicitly; neither Vercel nor GCP has an EC2-style instance role |
 | `AWS_REGION` | Yes for AWS | e.g. `ap-south-1` |
-| `S3_BUCKET` | Yes | Upload bucket name |
+| `S3_BUCKET` | Yes (web + worker) | Upload bucket name |
 | `S3_ENDPOINT` | Local only | e.g. `http://localhost:9000` for MinIO |
-| `FACE_PROVIDER` | No | `aws` (default) or `mock` for local dev |
+| `FACE_PROVIDER` | No | `aws` (default) or `mock` for local dev — `mock` only works if enroll and verify run in the same process, so keep it `aws` once web and worker are split |
 | `RAZORPAY_PLATFORM_KEY` | No | Optional platform-level Razorpay key |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Push | Web Push credentials |
-| `NEXT_PUBLIC_APP_URL` / `NEXTAUTH_URL` | Yes | App URL (e.g. `http://localhost:3000`) |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Worker only | Web Push credentials |
+| `AZURE_END_POINT` / `AZURE_OPEN_AI_API_KEY` / `AZURE_DEPLOYMENT_NAME` | Worker only | Document AI extraction |
+| `NEXT_PUBLIC_APP_URL` / `NEXTAUTH_URL` | Web only | App URL (e.g. `http://localhost:3000`) |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Optional | Campus location map picker |
 | `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` | Optional | Google Maps Map ID for the picker |
-
-\* On EC2, prefer an instance IAM role instead of long-lived access keys.
 
 **Per-school secrets (not in `.env`):** fee provider keys (Razorpay, PhonePe, PayPal, Stripe) and RazorpayX payout credentials are configured in **Admin → Settings**. Use test keys (e.g. `rzp_test_*`) for local demos.
 
 ## Face Recognition (AWS Rekognition)
 
-Teacher and staff attendance uses **geofence + face verification**. Faces are enrolled once, then verified asynchronously by the BullMQ worker via **AWS Rekognition** (fully managed cloud API).
+Teacher and staff attendance uses **geofence + face verification**. Faces are enrolled once, then verified asynchronously by the standalone worker service via **AWS Rekognition** (fully managed cloud API).
 
 ### How it works
 
 ```
 Browser (camera + GPS)
   → submit attendance action (geofence check)
-  → BullMQ job queued
-  → worker calls AWS Rekognition SearchFacesByImage
+  → captured frame uploaded to S3
+  → web app dispatches POST /jobs/face-verify to the worker (deferred via Next.js after())
+  → worker downloads the frame and calls AWS Rekognition SearchFacesByImage
   → attendance marked PRESENT / FAILED / ESCALATED
 ```
 
@@ -146,10 +150,10 @@ Browser (camera + GPS)
 |------|--------|
 | Enroll face | `/teacher/attendance` or staff attendance panel |
 | Mark attendance | Same page — camera + location required |
-| Verify (async) | `npm run worker` process |
+| Verify (async) | Worker service (`npm run worker` locally; Cloud Run/Vercel in production) |
 | Admin review | `/admin/attendance` (escalated cases) |
 
-**Important:** The worker must be running for face verification to complete. Enrollment and attendance submission happen in the web app; matching runs in the worker.
+**Important:** The worker must be reachable at `WORKER_URL` for face verification to complete. Enrollment and attendance submission happen in the web app; matching runs in the worker. Face verify jobs are dispatched over HTTP with a shared `WORKER_SECRET`, not a job queue — Redis is only used for rate limiting now.
 
 ### Environment variables
 
@@ -161,7 +165,7 @@ Browser (camera + GPS)
 | `AWS_ACCESS_KEY_ID` | optional on EC2 | IAM user keys (if not using instance role) |
 | `AWS_SECRET_ACCESS_KEY` | optional on EC2 | IAM user secret |
 
-`.env.docker` sets `FACE_PROVIDER=mock` so local Docker dev works without Rekognition. For production, use `FACE_PROVIDER=aws`.
+`.env.docker` sets `FACE_PROVIDER=mock` so local Docker dev works without Rekognition. For production, use `FACE_PROVIDER=aws` on **both** the web app and the worker — `mock` keeps state in memory per-process, so it breaks once enrollment (web) and verification (worker) run in separate deployments.
 
 ### Local development (mock provider)
 
@@ -175,23 +179,7 @@ This enables the full attendance UI flow without AWS credentials. Verification u
 
 ### Production (AWS Rekognition)
 
-**Option A — EC2 IAM role (recommended)**
-
-1. Create an IAM role for your EC2 instance.
-2. Attach policies:
-   - `AmazonRekognitionFullAccess` (or a tighter custom policy)
-   - S3 access for document uploads (if not already attached)
-3. Launch EC2 with that role — no access keys needed in `.env`.
-4. Set in `.env`:
-
-```env
-FACE_PROVIDER=aws
-AWS_REGION=ap-south-1
-```
-
-The face collection (`classsync-faces`) is **created automatically** on first enrollment.
-
-**Option B — IAM user access keys**
+Both the web app and the worker call AWS SDKs (Rekognition, S3), and neither Vercel nor GCP offers an EC2-style instance role, so use an **IAM user with access keys** set on both deployments:
 
 ```env
 FACE_PROVIDER=aws
@@ -200,7 +188,11 @@ AWS_ACCESS_KEY_ID=your-key
 AWS_SECRET_ACCESS_KEY=your-secret
 ```
 
-Ensure the IAM user has `rekognition:CreateCollection`, `rekognition:IndexFaces`, and `rekognition:SearchFacesByImage` permissions.
+Ensure the IAM user has `rekognition:CreateCollection`, `rekognition:IndexFaces`, and `rekognition:SearchFacesByImage` permissions (plus S3 read/write for the uploads bucket).
+
+The face collection (`classsync-faces`) is **created automatically** on first enrollment.
+
+Note: this replaces the EC2-instance-role option. Cloud Run and Vercel are not AWS, so there is no equivalent "instance role" — an IAM user's access keys (scoped to only the permissions above) are the simplest cross-cloud option. If you want to avoid long-lived keys, use [AWS IAM Roles Anywhere](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/introduction.html) (Cloud Run) or a short-lived STS token minted by another service instead.
 
 ### AWS free tier and cost
 
@@ -216,7 +208,7 @@ Hackathon / jury testing usually stays within free tier or costs only a few doll
 
 ### Testing face attendance
 
-1. Start Postgres, Redis, web app, and **worker**.
+1. Start Postgres, Redis, the web app, and the **worker** (`npm run worker`).
 2. Log in as `teacher@demo.com` / `teacher123`.
 3. Go to **Mark Attendance** (`/teacher/attendance`).
 4. Click **Enroll Face** — allow camera access.
@@ -229,11 +221,13 @@ Hackathon / jury testing usually stays within free tier or costs only a few doll
 
 | Issue | Fix |
 |-------|-----|
-| Stuck on `PROCESSING` | Ensure `npm run worker` is running |
+| Stuck on `PROCESSING` | Ensure the worker is running and reachable at `WORKER_URL`; check `/system/monitoring` worker health |
+| `WORKER_URL is not configured` errors in web logs | Set `WORKER_URL` (and `WORKER_SECRET`) on the web deployment |
+| `401 Unauthorized` from the worker | `WORKER_SECRET` doesn't match between the web app and the worker |
 | Enrollment fails | Check IAM permissions and `AWS_REGION` |
 | Always `FAILED` | Re-enroll face; improve lighting; face the camera directly |
 | Blocked by geofence | Update school campus coords/radius in admin settings |
-| Using mock locally | Set `FACE_PROVIDER=mock` in `.env` |
+| Using mock locally | Set `FACE_PROVIDER=mock` in `.env` (local dev only — see note above on production) |
 
 ## Fees & Payments
 
@@ -255,7 +249,7 @@ School admins manage employees at `/admin/employees` and payroll at `/admin/empl
 - Salary components and bank accounts must be complete before payout readiness passes
 - Optional **RazorpayX** auto-payouts are configured per school (not via root `.env`)
 - Teachers/staff view slips under `/teacher/payroll` or `/staff/payroll`
-- Worker processes payout jobs — keep `npm run worker` running
+- The worker runs the daily payroll job at `POST/GET /jobs/payroll`, triggered by Cloud Scheduler or a Vercel Cron (`worker/vercel.json`) — no more in-process BullMQ repeatable job
 
 ## Timetable & Scheduling
 
@@ -273,14 +267,66 @@ Setup wizard: `/admin/schedule/setup`
 View generated timetable: `/admin/schedule`  
 Teacher swaps: `/teacher/schedule/swaps`
 
-## Deployment (Railway / Fly.io / AWS)
+## Deployment — Web (Vercel) + Worker (Cloud Run or a second Vercel project)
 
-Deploy **two services** from the same repo:
+The web app and the worker are two independent deployments from the same repo, talking over HTTP (`WORKER_URL` + `WORKER_SECRET`). There is no shared always-on process and no EC2 instance — the worker scales to zero when idle on either target.
 
-1. **Web:** `npm run build && npm start`
-2. **Worker:** `npm run worker` (required for face verification, notifications, payroll jobs)
+```mermaid
+flowchart LR
+  Browser --> Web["Web app — Vercel"]
+  Web -->|"POST /jobs/* (after response, bearer auth)"| Worker["Worker service"]
+  Worker --> Postgres
+  Worker --> Rekognition["AWS Rekognition"]
+  Worker --> S3
+  Worker --> WebPush["Web Push"]
+  Scheduler["Cloud Scheduler / Vercel Cron"] --> Worker
+  Web --> Redis["Redis — rate limiting only"]
+```
 
-Add managed PostgreSQL and Redis. For face recognition on AWS EC2, attach an IAM role with Rekognition access and set `FACE_PROVIDER=aws`. Point `S3_*` at a real bucket (not MinIO) in production.
+### 1. Web app → Vercel
+
+Deploy `class-sync/` as a normal Next.js project (`npm run build && npm start`, or the Vercel Next.js preset). Set `WORKER_URL` to the worker's deployed URL and `WORKER_SECRET` to a shared secret (see below).
+
+### 2. Worker → GCP Cloud Run (recommended default)
+
+Cloud Run scales to zero, so idle cost is effectively $0, while still supporting the long request timeouts (up to 60 minutes) that CSP timetable generation and payroll runs benefit from:
+
+```bash
+cd class-sync
+gcloud run deploy classsync-worker \
+  --source . --dockerfile worker/Dockerfile \
+  --region asia-south1 \
+  --min-instances 0 --max-instances 10 \
+  --port 3001 \
+  --set-env-vars WORKER_ROLE=worker \
+  --set-secrets DATABASE_URL=...,WORKER_SECRET=...,AWS_ACCESS_KEY_ID=...,AWS_SECRET_ACCESS_KEY=...,ENCRYPTION_KEY=...,VAPID_PUBLIC_KEY=...,VAPID_PRIVATE_KEY=...
+```
+
+Then schedule the cron-style jobs with Cloud Scheduler (HTTP target, bearer token = `WORKER_SECRET`):
+
+| Job | Path | Schedule |
+|-----|------|----------|
+| Payroll | `POST /jobs/payroll` | `0 6 * * *` |
+| Class reminders | `POST /jobs/reminders` | `*/5 * * * *` |
+
+### 2 (alternative) — Worker → a second Vercel project
+
+`worker/src/app.ts` exports a plain Hono app, which Vercel can deploy with zero configuration. To use this instead of Cloud Run:
+
+1. Create a **new** Vercel project from the same repo.
+2. Set **Root Directory** to `class-sync/worker` and enable **"Include source files outside of the Root Directory"** (Project Settings → General) so it can reach `../src/lib/*`.
+3. `worker/package.json` provides the worker's own dependencies for this deployment path (separate from the web app's `node_modules`, since Vercel installs relative to the Root Directory).
+4. Set the same env vars as the web app's AWS/DB/notification vars, plus `WORKER_ROLE=worker` and `WORKER_SECRET`.
+5. `worker/vercel.json` registers the payroll/reminder crons (Vercel Cron issues `GET`; set `CRON_SECRET` to the same value as `WORKER_SECRET` so Vercel's cron requests pass the worker's bearer-auth check).
+6. Watch out for Vercel's function `maxDuration` limits (60s Hobby / 300s Pro) — large-school schedule generation can run long; Cloud Run's 60-minute timeout has more headroom.
+
+### Shared requirements (either target)
+
+- Managed PostgreSQL and Redis reachable from both deployments (Redis is web-only now, but keep it provisioned).
+- `FACE_PROVIDER=aws` on **both** deployments — `mock` only works within a single process.
+- Explicit `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` on the worker (no EC2 instance role exists on Cloud Run or Vercel).
+- Real `S3_*` bucket (not MinIO) in production.
+- `WORKER_SECRET` identical on both deployments.
 
 ## PWA Notes
 
@@ -296,8 +342,15 @@ src/
 ├── actions/       # Server Actions
 ├── components/    # UI components
 ├── lib/           # Auth, RBAC, DB, scheduler, payments, payroll, face, etc.
-├── workers/       # BullMQ worker process
+│   └── jobs/      # Job payload types, HTTP dispatch client, worker-side job handlers
 └── middleware.ts  # Auth + route protection
+worker/            # Standalone HTTP worker service (deployable separately from the web app)
+├── src/
+│   ├── app.ts         # Hono app + /jobs/* routes (shared entry for tsx, Docker, and Vercel)
+│   └── node-server.ts # Local dev / Docker entrypoint (@hono/node-server)
+├── Dockerfile         # Cloud Run / any container host
+├── vercel.json         # Crons for the "second Vercel project" deployment option
+└── package.json        # Standalone deps, used only for the Vercel deployment option
 prisma/
 ├── schema.prisma
 ├── seed.ts

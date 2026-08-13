@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/jobs/payroll", "schedule": "0 6 * * *" },
+    { "path": "/jobs/reminders", "schedule": "*/5 * * * *" }
+  ]
+}

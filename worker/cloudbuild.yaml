@@ -1,0 +1,22 @@
+# Build the ClassSync worker image from worker/Dockerfile (repo root as context).
+# Used by worker/deploy-gcp.ps1 — do not rely on a root Dockerfile (that's for Next.js later).
+
+substitutions:
+  _IMAGE: "asia-south1-docker.pkg.dev/${PROJECT_ID}/classsync/worker:latest"
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - worker/Dockerfile
+      - -t
+      - ${_IMAGE}
+      - .
+
+images:
+  - ${_IMAGE}
+
+timeout: 1200s
+options:
+  logging: CLOUD_LOGGING_ONLY

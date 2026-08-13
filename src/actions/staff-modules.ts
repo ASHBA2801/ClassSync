@@ -8,7 +8,7 @@ import { hasCapability, CAPABILITIES } from "@/lib/employees/capabilities";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import type { EmployeeJobType } from "@prisma/client";
 import { checkGeofence } from "@/lib/geofence";
-import { getAttendanceQueue } from "@/lib/queue/queues";
+import { dispatchFaceVerification } from "@/lib/jobs/dispatch";
 import { checkRateLimit, isDuplicate } from "@/lib/rate-limit";
 import { enqueueNotification } from "@/lib/notifications";
 import {
@@ -597,20 +597,22 @@ export async function submitStaffAttendanceAction(input: z.infer<typeof submitSt
     return { success: false, status: "ESCALATED", attemptNumber };
   }
 
-  const queue = getAttendanceQueue();
-  await queue.add(
-    "verify",
-    {
-      type: "staff",
-      attendanceId: attendance!.id,
-      attemptId: attempt.id,
-      userId: ctx.userId,
-      schoolId: ctx.schoolId,
-      attemptNumber,
-      imageBase64: data.imageBase64,
-    },
-    { jobId: `staff-attendance-${attempt.id}` },
-  );
+  let imageKey: string | undefined;
+  if (data.imageBase64) {
+    const raw = data.imageBase64.includes(",") ? data.imageBase64.split(",")[1]! : data.imageBase64;
+    imageKey = buildS3Key(`attendance/verify/${ctx.userId}`, `${attempt.id}.jpg`);
+    await putObject(imageKey, Buffer.from(raw, "base64"), "image/jpeg");
+  }
+
+  dispatchFaceVerification({
+    type: "staff",
+    attendanceId: attendance!.id,
+    attemptId: attempt.id,
+    userId: ctx.userId,
+    schoolId: ctx.schoolId,
+    attemptNumber,
+    imageKey,
+  });
 
   revalidatePath("/staff/attendance");
   return { success: true, status: "PROCESSING", attemptNumber, attendanceId: attendance!.id };

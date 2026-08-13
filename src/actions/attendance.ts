@@ -6,7 +6,8 @@ import { prisma, withTenantContext } from "@/lib/db/prisma";
 import { requireSchoolContext, requireSchoolPermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { checkGeofence } from "@/lib/geofence";
-import { getAttendanceQueue } from "@/lib/queue/queues";
+import { dispatchFaceVerification } from "@/lib/jobs/dispatch";
+import { buildS3Key, putObject } from "@/lib/storage/s3";
 import { checkRateLimit, isDuplicate } from "@/lib/rate-limit";
 import { enqueueNotification } from "@/lib/notifications";
 import { createAuditLog } from "@/lib/audit";
@@ -135,20 +136,22 @@ export async function submitTeacherAttendanceAction(input: z.infer<typeof submit
     return { success: false, status: "ESCALATED", attemptNumber };
   }
 
-  const queue = getAttendanceQueue();
-  await queue.add(
-    "verify",
-    {
-      type: "teacher",
-      attendanceId: attendance.id,
-      attemptId: attempt.id,
-      userId: ctx.userId,
-      schoolId: ctx.schoolId,
-      attemptNumber,
-      imageBase64: data.imageBase64,
-    },
-    { jobId: `attendance-${attempt.id}` },
-  );
+  let imageKey: string | undefined;
+  if (data.imageBase64) {
+    const raw = data.imageBase64.includes(",") ? data.imageBase64.split(",")[1]! : data.imageBase64;
+    imageKey = buildS3Key(`attendance/verify/${ctx.userId}`, `${attempt.id}.jpg`);
+    await putObject(imageKey, Buffer.from(raw, "base64"), "image/jpeg");
+  }
+
+  dispatchFaceVerification({
+    type: "teacher",
+    attendanceId: attendance.id,
+    attemptId: attempt.id,
+    userId: ctx.userId,
+    schoolId: ctx.schoolId,
+    attemptNumber,
+    imageKey,
+  });
 
   return { success: true, status: "PROCESSING", attemptNumber, attendanceId: attendance.id };
 }

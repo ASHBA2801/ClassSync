@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { getSchedulerQueue } from "@/lib/queue/queues";
+import { dispatchScheduleGeneration } from "@/lib/jobs/dispatch";
 import {
   analyzeScheduleFeasibility,
   summarizeSchedulerErrors,
@@ -10,8 +10,7 @@ import { solveSchedule, DEFAULT_TIMETABLE_QUALITY } from "@/lib/scheduler/solver
 import type { SchedulerInput } from "@/lib/scheduler/solver";
 
 export async function enqueueScheduleGeneration(schoolId: string) {
-  const queue = getSchedulerQueue();
-  await queue.add("generate", { schoolId }, { attempts: 2 });
+  dispatchScheduleGeneration({ schoolId });
 }
 
 export async function generateScheduleForSchool(schoolId: string) {

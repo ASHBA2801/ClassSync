@@ -1,4 +1,4 @@
-import { getRedis } from "@/lib/queue/redis";
+import { getRedis } from "@/lib/redis";
 
 export async function checkRateLimit(
   key: string,

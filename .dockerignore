@@ -1,0 +1,10 @@
+# Used when building the worker image: docker build -f worker/Dockerfile .
+node_modules
+.next
+.git
+.env
+.env.local
+.env.docker
+.vercel
+coverage
+*.tsbuildinfo

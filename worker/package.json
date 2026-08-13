@@ -1,0 +1,25 @@
+{
+  "name": "classsync-worker",
+  "private": true,
+  "description": "Standalone package.json used ONLY when deploying this worker as its own Vercel project (Root Directory = class-sync/worker, with 'Include files outside the Root Directory' enabled). Not used by `npm run worker` or the Docker/Cloud Run build — those run from the repo root and share the web app's node_modules.",
+  "scripts": {
+    "postinstall": "prisma generate --schema=../prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.1098.0",
+    "@aws-sdk/client-s3": "^3.1098.0",
+    "@aws-sdk/s3-request-presigner": "^3.1098.0",
+    "@prisma/client": "^6.19.3",
+    "date-fns": "^4.4.0",
+    "date-fns-tz": "^3.2.0",
+    "hono": "^4.13.1",
+    "next": "16.2.12",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/web-push": "^3.6.4",
+    "prisma": "^6.19.3",
+    "typescript": "^5"
+  }
+}
