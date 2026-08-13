@@ -4,6 +4,7 @@ import { compare } from "bcryptjs";
 import type { Role } from "@prisma/client";
 import { withSystemAdminContext } from "@/lib/db/prisma";
 import { getPermissionsForRole } from "@/lib/rbac/permissions";
+import { authConfig } from "@/lib/auth/config";
 import {
   countSelectableContexts,
   listUserContexts,
@@ -43,11 +44,7 @@ declare module "@auth/core/jwt" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true,
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-  },
+  ...authConfig,
   providers: [
     Credentials({
       name: "credentials",
@@ -131,6 +128,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    ...authConfig.callbacks,
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id!;
@@ -168,18 +166,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       return token;
-    },
-    async session({ session, token }) {
-      session.user.id = token.id;
-      session.user.role = token.role;
-      session.user.schoolId = token.schoolId;
-      session.user.permissions = token.permissions;
-      session.user.activeStudentId = token.activeStudentId ?? null;
-      session.user.needsContext = token.needsContext ?? false;
-      if (token.iat) {
-        session.user.sessionStarted = token.iat * 1000;
-      }
-      return session;
     },
   },
 });
