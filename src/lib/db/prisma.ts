@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Role } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -41,4 +41,36 @@ export async function withSystemAdminContext<T>(
   fn: (tx: PrismaClient) => Promise<T>,
 ): Promise<T> {
   return withTenantContext("", fn, true);
+}
+
+/** Look up a role membership without relying on the generated compound unique name. */
+export async function findSchoolMembership(
+  tx: PrismaClient,
+  userId: string,
+  schoolId: string,
+  role: Role,
+) {
+  return tx.userSchoolMembership.findFirst({
+    where: { userId, schoolId, role },
+  });
+}
+
+/** Ensure a (user, school, role) membership exists and is active. */
+export async function upsertSchoolMembership(
+  tx: PrismaClient,
+  userId: string,
+  schoolId: string,
+  role: Role,
+) {
+  const existing = await findSchoolMembership(tx, userId, schoolId, role);
+  if (existing) {
+    if (existing.isActive) return existing;
+    return tx.userSchoolMembership.update({
+      where: { id: existing.id },
+      data: { isActive: true },
+    });
+  }
+  return tx.userSchoolMembership.create({
+    data: { userId, schoolId, role },
+  });
 }

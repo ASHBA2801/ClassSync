@@ -4,7 +4,7 @@ import { hash } from "bcryptjs";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import type { EmployeeJobType, EmploymentStatus, Prisma, Role } from "@prisma/client";
-import { prisma, withTenantContext } from "@/lib/db/prisma";
+import { prisma, upsertSchoolMembership, withTenantContext } from "@/lib/db/prisma";
 import {
   requireSchoolContext,
   requireSchoolPermission,
@@ -188,17 +188,7 @@ export async function createEmployeeAction(input: z.infer<typeof createEmployeeS
       update: { name: data.name, phone: data.phone },
     });
 
-    await tx.userSchoolMembership.upsert({
-      where: {
-        userId_schoolId_role: {
-          userId: user.id,
-          schoolId: ctx.schoolId,
-          role: platformRole,
-        },
-      },
-      create: { userId: user.id, schoolId: ctx.schoolId, role: platformRole },
-      update: { isActive: true },
-    });
+    await upsertSchoolMembership(tx, user.id, ctx.schoolId, platformRole);
 
     return tx.employee.create({
       data: {
@@ -268,21 +258,7 @@ export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeS
           },
           data: { isActive: false },
         });
-        await tx.userSchoolMembership.upsert({
-          where: {
-            userId_schoolId_role: {
-              userId: existing.userId,
-              schoolId: ctx.schoolId,
-              role: platformRole,
-            },
-          },
-          create: {
-            userId: existing.userId,
-            schoolId: ctx.schoolId,
-            role: platformRole,
-          },
-          update: { isActive: true },
-        });
+        await upsertSchoolMembership(tx, existing.userId, ctx.schoolId, platformRole);
       }
     }
 
@@ -302,21 +278,7 @@ export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeS
       const platformRole = getPlatformRoleForJobType(
         data.jobType ?? existing.jobType,
       );
-      await tx.userSchoolMembership.upsert({
-        where: {
-          userId_schoolId_role: {
-            userId: existing.userId,
-            schoolId: ctx.schoolId,
-            role: platformRole,
-          },
-        },
-        create: {
-          userId: existing.userId,
-          schoolId: ctx.schoolId,
-          role: platformRole,
-        },
-        update: { isActive: true },
-      });
+      await upsertSchoolMembership(tx, existing.userId, ctx.schoolId, platformRole);
     }
 
     return tx.employee.update({

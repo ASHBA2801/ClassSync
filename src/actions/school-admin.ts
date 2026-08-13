@@ -2,7 +2,7 @@
 
 import { hash } from "bcryptjs";
 import { z } from "zod";
-import { prisma, withTenantContext } from "@/lib/db/prisma";
+import { prisma, upsertSchoolMembership, withTenantContext } from "@/lib/db/prisma";
 import { getGradeForSchool, getSectionForSchool } from "@/lib/school/queries";
 import { requireSchoolContext, requireSchoolPermission } from "@/lib/rbac/guard";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
@@ -28,17 +28,7 @@ export async function createSchoolUserAction(input: z.infer<typeof createUserSch
       update: { name: data.name, phone: data.phone },
     });
 
-    await tx.userSchoolMembership.upsert({
-      where: {
-        userId_schoolId_role: {
-          userId: created.id,
-          schoolId: ctx.schoolId,
-          role: data.role,
-        },
-      },
-      create: { userId: created.id, schoolId: ctx.schoolId, role: data.role },
-      update: { isActive: true },
-    });
+    await upsertSchoolMembership(tx, created.id, ctx.schoolId, data.role);
 
     return created;
   });
@@ -440,17 +430,7 @@ export async function linkGuardianAction(parentId: string, studentId: string, re
       data: { schoolId: ctx.schoolId, parentId, studentId, relation },
     });
 
-    await tx.userSchoolMembership.upsert({
-      where: {
-        userId_schoolId_role: {
-          userId: parentId,
-          schoolId: ctx.schoolId,
-          role: "PARENT",
-        },
-      },
-      create: { userId: parentId, schoolId: ctx.schoolId, role: "PARENT" },
-      update: { isActive: true },
-    });
+    await upsertSchoolMembership(tx, parentId, ctx.schoolId, "PARENT");
 
     return relationship;
   });

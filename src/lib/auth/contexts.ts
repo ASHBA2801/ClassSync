@@ -1,5 +1,9 @@
 import type { Role } from "@prisma/client";
-import { withSystemAdminContext } from "@/lib/db/prisma";
+import {
+  findSchoolMembership,
+  upsertSchoolMembership,
+  withSystemAdminContext,
+} from "@/lib/db/prisma";
 import { getPermissionsForRole } from "@/lib/rbac/permissions";
 
 export const EMPLOYEE_ROLES: Role[] = ["TEACHER", "STAFF", "SCHOOL_ADMIN"];
@@ -76,17 +80,7 @@ export async function listUserContexts(userId: string): Promise<UserContexts> {
 
     // Ensure PARENT membership exists for every guardian link
     for (const rel of relationships) {
-      await tx.userSchoolMembership.upsert({
-        where: {
-          userId_schoolId_role: {
-            userId,
-            schoolId: rel.schoolId,
-            role: "PARENT",
-          },
-        },
-        create: { userId, schoolId: rel.schoolId, role: "PARENT" },
-        update: { isActive: true },
-      });
+      await upsertSchoolMembership(tx, userId, rel.schoolId, "PARENT");
     }
 
     return { memberships, relationships };
@@ -189,13 +183,7 @@ export async function resolveContextSwitch(
       });
       if (!relationship) return false;
 
-      await tx.userSchoolMembership.upsert({
-        where: {
-          userId_schoolId_role: { userId, schoolId, role: "PARENT" },
-        },
-        create: { userId, schoolId, role: "PARENT" },
-        update: { isActive: true },
-      });
+      await upsertSchoolMembership(tx, userId, schoolId, "PARENT");
 
       return true;
     });
@@ -206,9 +194,7 @@ export async function resolveContextSwitch(
   }
 
   const membership = await withSystemAdminContext(async (tx) =>
-    tx.userSchoolMembership.findUnique({
-      where: { userId_schoolId_role: { userId, schoolId, role } },
-    }),
+    findSchoolMembership(tx, userId, schoolId, role),
   );
   if (!membership || !membership.isActive) return null;
 

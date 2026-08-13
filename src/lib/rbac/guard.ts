@@ -1,7 +1,7 @@
 import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
-import { prisma, withSystemAdminContext } from "@/lib/db/prisma";
+import { prisma, findSchoolMembership, withSystemAdminContext } from "@/lib/db/prisma";
 import { getPermissionsForRole } from "./permissions";
 
 export interface SessionContext {
@@ -119,9 +119,7 @@ export async function revalidateSessionForSensitiveOp(
   role: Role,
 ) {
   const membership = await withSystemAdminContext(async (tx) =>
-    tx.userSchoolMembership.findUnique({
-      where: { userId_schoolId_role: { userId, schoolId, role } },
-    }),
+    findSchoolMembership(tx, userId, schoolId, role),
   );
   if (!membership || !membership.isActive) {
     throw new ForbiddenError("Membership no longer valid");
