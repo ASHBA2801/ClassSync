@@ -289,7 +289,7 @@ model UserSchoolMembership {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, schoolId])
+  @@unique([userId, schoolId, role])
   @@index([schoolId, role])
 }
 
@@ -1008,6 +1008,7 @@ model SecurityVisitorLog {
   visitorName String
   purpose     String
   phone       String?
+  photoS3Key  String?
   checkInAt   DateTime @default(now())
   checkOutAt  DateTime?
   notes       String?

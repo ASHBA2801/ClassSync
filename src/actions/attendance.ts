@@ -399,9 +399,24 @@ export async function enrollFaceAction(imageBase64: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.ATTENDANCE_MARK);
   const key = `face/${ctx.userId}/enrolled.jpg`;
 
+  const raw = imageBase64.includes(",") ? imageBase64.split(",")[1]! : imageBase64;
+  const buffer = Buffer.from(raw, "base64");
+  if (buffer.length < 500) {
+    throw new Error("Photo too small or empty. Start the camera and capture again.");
+  }
+
   const provider = getFaceRecognitionProvider();
-  const buffer = Buffer.from(imageBase64, "base64");
-  await provider.enrollFace(ctx.userId, buffer);
+  try {
+    await provider.enrollFace(ctx.userId, buffer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/security token|UnrecognizedClient|InvalidClientTokenId|credentials/i.test(msg)) {
+      throw new Error(
+        "AWS credentials are invalid. Update AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or set FACE_PROVIDER=mock.",
+      );
+    }
+    throw err instanceof Error ? err : new Error(msg);
+  }
 
   await prisma.user.update({
     where: { id: ctx.userId },
@@ -409,4 +424,13 @@ export async function enrollFaceAction(imageBase64: string) {
   });
 
   return { enrolled: true, key };
+}
+
+export async function getFaceEnrollmentStatusAction() {
+  const ctx = await requireSchoolPermission(PERMISSIONS.ATTENDANCE_MARK);
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.userId },
+    select: { faceImageKey: true },
+  });
+  return { enrolled: Boolean(user?.faceImageKey) };
 }

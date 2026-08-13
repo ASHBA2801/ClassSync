@@ -7,9 +7,10 @@ import {
 } from "@/actions/attendance";
 import { FaceAttendanceFlow } from "@/components/attendance/face-attendance-flow";
 
-export function AttendanceFlow() {
+export function AttendanceFlow({ faceEnrolled }: { faceEnrolled: boolean }) {
   return (
     <FaceAttendanceFlow
+      initiallyEnrolled={faceEnrolled}
       actions={{
         submit: submitTeacherAttendanceAction,
         getStatus: async (attendanceId) => {

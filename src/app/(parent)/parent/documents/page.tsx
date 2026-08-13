@@ -1,4 +1,4 @@
-import { PortalShell } from "@/components/portal-shell";
+import { ParentPortalShell } from "@/components/parent-portal-shell";
 import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import { getLinkedStudentsAction, listParentDocumentsAction } from "@/actions/parent";
@@ -22,9 +22,12 @@ export default async function DocumentsPage() {
   );
 
   return (
-    <PortalShell title="Documents" navItems={parentNav} userName={ctx.name}>
+    <ParentPortalShell title="Documents" navItems={parentNav} userName={ctx.name}>
       <div className="space-y-6">
-        <DocumentUploadForm students={students.map((s) => ({ id: s.id, name: s.name }))} />
+        <DocumentUploadForm
+          students={students.map((s) => ({ id: s.id, name: s.name }))}
+          defaultStudentId={ctx.activeStudentId ?? undefined}
+        />
         <Card>
           <CardHeader>
             <CardTitle>Student documents & extracted details</CardTitle>
@@ -37,6 +40,6 @@ export default async function DocumentsPage() {
           </CardContent>
         </Card>
       </div>
-    </PortalShell>
+    </ParentPortalShell>
   );
 }

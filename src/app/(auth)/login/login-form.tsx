@@ -32,11 +32,11 @@ const DEMO_ICON_CLASSES = [
 function getDemoIcon(role: string): LucideIcon {
   if (role.includes("System Admin")) return Shield;
   if (role.includes("School Admin")) return Building2;
-  if (role === "Teacher") return GraduationCap;
+  if (role.includes("Teacher")) return GraduationCap;
   if (role.includes("Driver")) return Bus;
   if (role.includes("Security")) return ShieldCheck;
   if (role.includes("Cleaner")) return Sparkles;
-  if (role === "Parent") return Users;
+  if (role.includes("Parent")) return Users;
   return Users;
 }
 
@@ -54,14 +54,13 @@ export function LoginForm() {
   const [loading, setLoading] = useState<string | null>(null);
   const error = formError || urlError || "";
 
-  async function login(email: string, password: string, schoolId?: string) {
+  async function login(email: string, password: string) {
     setLoading(email);
     setFormError("");
 
     const result = await credentialsSignInAction({
       email,
       password,
-      schoolId: schoolId || undefined,
     });
 
     if (result?.error) {
@@ -76,7 +75,6 @@ export function LoginForm() {
     await login(
       formData.get("email") as string,
       formData.get("password") as string,
-      (formData.get("schoolId") as string) || undefined,
     );
   }
 
@@ -113,22 +111,6 @@ export function LoginForm() {
               required
               disabled={loading !== null}
               className={`glass-input ${styles.input} !pr-10`}
-            />
-          </div>
-        </div>
-
-        <div className={styles.field}>
-          <label htmlFor="schoolId" className={styles.label}>
-            School ID (optional)
-          </label>
-          <div className={styles.inputWrap}>
-            <Building2 className={styles.inputIcon} />
-            <input
-              id="schoolId"
-              name="schoolId"
-              placeholder="Leave blank for demo accounts"
-              className={`glass-input ${styles.input}`}
-              disabled={loading !== null}
             />
           </div>
         </div>

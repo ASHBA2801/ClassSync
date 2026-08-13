@@ -1,7 +1,7 @@
 import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
-import { prisma, withSystemAdminContext } from "@/lib/db/prisma";
+import { prisma, findSchoolMembership, withSystemAdminContext } from "@/lib/db/prisma";
 import { getPermissionsForRole } from "./permissions";
 
 export interface SessionContext {
@@ -11,6 +11,8 @@ export interface SessionContext {
   schoolId: string | null;
   role: Role;
   permissions: string[];
+  activeStudentId: string | null;
+  needsContext: boolean;
 }
 
 export async function getSessionContext(): Promise<SessionContext | null> {
@@ -28,6 +30,8 @@ export async function getSessionContext(): Promise<SessionContext | null> {
     schoolId: session.user.schoolId ?? null,
     role,
     permissions,
+    activeStudentId: session.user.activeStudentId ?? null,
+    needsContext: session.user.needsContext ?? false,
   };
 }
 
@@ -80,7 +84,10 @@ export async function requireSchoolContext(): Promise<SessionContext & { schoolI
   let schoolId: string | null = null;
 
   if (ctx.schoolId) {
-    const matchingMembership = memberships.find((membership) => membership.schoolId === ctx.schoolId);
+    const matchingMembership = memberships.find(
+      (membership) =>
+        membership.schoolId === ctx.schoolId && membership.role === ctx.role,
+    );
     if (matchingMembership) {
       schoolId = matchingMembership.schoolId;
     }
@@ -88,7 +95,11 @@ export async function requireSchoolContext(): Promise<SessionContext & { schoolI
 
   if (!schoolId) {
     const roleMembership = memberships.find((membership) => membership.role === ctx.role);
-    schoolId = roleMembership?.schoolId ?? memberships[0]!.schoolId;
+    schoolId = roleMembership?.schoolId ?? null;
+  }
+
+  if (!schoolId) {
+    throw new ForbiddenError("School context required for active role");
   }
 
   const school = await prisma.school.findUnique({
@@ -102,11 +113,13 @@ export async function requireSchoolContext(): Promise<SessionContext & { schoolI
   return { ...ctx, schoolId };
 }
 
-export async function revalidateSessionForSensitiveOp(userId: string, schoolId: string) {
+export async function revalidateSessionForSensitiveOp(
+  userId: string,
+  schoolId: string,
+  role: Role,
+) {
   const membership = await withSystemAdminContext(async (tx) =>
-    tx.userSchoolMembership.findUnique({
-      where: { userId_schoolId: { userId, schoolId } },
-    }),
+    findSchoolMembership(tx, userId, schoolId, role),
   );
   if (!membership || !membership.isActive) {
     throw new ForbiddenError("Membership no longer valid");

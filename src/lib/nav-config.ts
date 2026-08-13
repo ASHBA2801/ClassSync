@@ -42,6 +42,7 @@ export const schoolAdminNav: NavItem[] = [
   { href: "/admin/schedule", label: "Schedule", icon: "calendar" },
   { href: "/admin/calendar", label: "Working Calendar", icon: "calendar-days" },
   { href: "/admin/attendance", label: "Attendance", icon: "clipboard-check" },
+  { href: "/admin/visitor-logs", label: "Entry Logs", icon: "file-text" },
   { href: "/admin/leave", label: "Leave Requests", icon: "file-text" },
   { href: "/admin/fees", label: "Fees", icon: "dollar-sign" },
   { href: "/admin/employees/payroll", label: "Payroll", icon: "credit-card" },

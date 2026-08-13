@@ -2,8 +2,13 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import type { Role } from "@prisma/client";
-import { prisma, withSystemAdminContext } from "@/lib/db/prisma";
+import { withSystemAdminContext } from "@/lib/db/prisma";
 import { getPermissionsForRole } from "@/lib/rbac/permissions";
+import {
+  countSelectableContexts,
+  listUserContexts,
+  resolveContextSwitch,
+} from "@/lib/auth/contexts";
 
 declare module "next-auth" {
   interface User {
@@ -11,6 +16,8 @@ declare module "next-auth" {
     role: Role;
     schoolId: string | null;
     permissions: string[];
+    activeStudentId?: string | null;
+    needsContext?: boolean;
   }
 
   interface Session {
@@ -18,6 +25,8 @@ declare module "next-auth" {
       email: string;
       name: string;
       sessionStarted?: number;
+      activeStudentId?: string | null;
+      needsContext?: boolean;
     };
   }
 }
@@ -28,6 +37,8 @@ declare module "@auth/core/jwt" {
     role: Role;
     schoolId: string | null;
     permissions: string[];
+    activeStudentId?: string | null;
+    needsContext?: boolean;
   }
 }
 
@@ -82,27 +93,80 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!membership) return null;
 
-        const permissions = await getPermissionsForRole(membership.role);
+        const contexts = await listUserContexts(user.id);
+        const needsContext = countSelectableContexts(contexts) > 1 || contexts.hasMultiple;
+
+        let role = membership.role;
+        let schoolId: string | null =
+          membership.role === "SYSTEM_ADMIN" ? null : membership.schoolId;
+        let activeStudentId: string | null = null;
+
+        // Auto-apply single context so middleware can skip the picker
+        if (!needsContext) {
+          if (contexts.parent.length === 1 && contexts.employee.length === 0) {
+            const child = contexts.parent[0]!;
+            role = "PARENT";
+            schoolId = child.schoolId;
+            activeStudentId = child.studentId;
+          } else if (contexts.employee.length === 1 && contexts.parent.length === 0) {
+            const emp = contexts.employee[0]!;
+            role = emp.role;
+            schoolId = emp.role === "SYSTEM_ADMIN" ? null : emp.schoolId;
+          }
+        }
+
+        const permissions = await getPermissionsForRole(role);
 
         return {
           id: user.id,
           email: user.email,
           name: user.name,
-          role: membership.role,
-          schoolId: membership.role === "SYSTEM_ADMIN" ? null : membership.schoolId,
+          role,
+          schoolId,
           permissions,
+          activeStudentId,
+          needsContext,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id!;
         token.role = user.role;
         token.schoolId = user.schoolId;
         token.permissions = user.permissions;
+        token.activeStudentId = user.activeStudentId ?? null;
+        token.needsContext = user.needsContext ?? false;
       }
+
+      if (trigger === "update" && session) {
+        const input = session as {
+          role?: Role;
+          schoolId?: string | null;
+          activeStudentId?: string | null;
+          needsContext?: boolean;
+        };
+
+        if (input.role !== undefined) {
+          const resolved = await resolveContextSwitch(token.id, {
+            role: input.role,
+            schoolId: input.schoolId ?? null,
+            activeStudentId: input.activeStudentId,
+          });
+          if (resolved) {
+            token.role = resolved.role;
+            token.schoolId = resolved.schoolId;
+            token.activeStudentId = resolved.activeStudentId;
+            token.permissions = resolved.permissions;
+            token.needsContext = false;
+          }
+        } else if (input.needsContext === false) {
+          token.needsContext = false;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -110,6 +174,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.role = token.role;
       session.user.schoolId = token.schoolId;
       session.user.permissions = token.permissions;
+      session.user.activeStudentId = token.activeStudentId ?? null;
+      session.user.needsContext = token.needsContext ?? false;
       if (token.iat) {
         session.user.sessionStarted = token.iat * 1000;
       }

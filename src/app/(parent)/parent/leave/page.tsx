@@ -1,4 +1,4 @@
-import { PortalShell } from "@/components/portal-shell";
+import { ParentPortalShell } from "@/components/parent-portal-shell";
 import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import { getLinkedStudentsAction, listParentLeaveRequestsAction } from "@/actions/parent";
@@ -18,12 +18,15 @@ export default async function ParentLeavePage() {
   ]);
 
   return (
-    <PortalShell title="Leave Requests" navItems={parentNav} userName={ctx.name}>
+    <ParentPortalShell title="Leave Requests" navItems={parentNav} userName={ctx.name}>
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle>Request Leave for Student</CardTitle></CardHeader>
           <CardContent>
-            <ParentLeaveForm students={students.map((s) => ({ id: s.id, name: s.name }))} />
+            <ParentLeaveForm
+              students={students.map((s) => ({ id: s.id, name: s.name }))}
+              defaultStudentId={ctx.activeStudentId ?? undefined}
+            />
           </CardContent>
         </Card>
         <Card className="lg:col-span-2">
@@ -60,6 +63,6 @@ export default async function ParentLeavePage() {
           </CardContent>
         </Card>
       </div>
-    </PortalShell>
+    </ParentPortalShell>
   );
 }

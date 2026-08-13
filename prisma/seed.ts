@@ -226,7 +226,9 @@ async function main() {
     teacherUsers.set(t.email, { id: user.id, name: user.name });
 
     await prisma.userSchoolMembership.upsert({
-      where: { userId_schoolId: { userId: user.id, schoolId: school.id } },
+      where: {
+        userId_schoolId_role: { userId: user.id, schoolId: school.id, role: "TEACHER" },
+      },
       create: { userId: user.id, schoolId: school.id, role: "TEACHER" },
       update: {},
     });
@@ -262,9 +264,11 @@ async function main() {
     });
 
     await prisma.userSchoolMembership.upsert({
-      where: { userId_schoolId: { userId: user.id, schoolId: school.id } },
+      where: {
+        userId_schoolId_role: { userId: user.id, schoolId: school.id, role: "STAFF" },
+      },
       create: { userId: user.id, schoolId: school.id, role: "STAFF" },
-      update: { role: "STAFF", isActive: true },
+      update: { isActive: true },
     });
 
     await prisma.employee.upsert({
@@ -295,19 +299,37 @@ async function main() {
   }
 
   await prisma.userSchoolMembership.upsert({
-    where: { userId_schoolId: { userId: systemAdmin.id, schoolId: school.id } },
+    where: {
+      userId_schoolId_role: {
+        userId: systemAdmin.id,
+        schoolId: school.id,
+        role: "SYSTEM_ADMIN",
+      },
+    },
     create: { userId: systemAdmin.id, schoolId: school.id, role: "SYSTEM_ADMIN" },
     update: {},
   });
 
   await prisma.userSchoolMembership.upsert({
-    where: { userId_schoolId: { userId: schoolAdmin.id, schoolId: school.id } },
+    where: {
+      userId_schoolId_role: {
+        userId: schoolAdmin.id,
+        schoolId: school.id,
+        role: "SCHOOL_ADMIN",
+      },
+    },
     create: { userId: schoolAdmin.id, schoolId: school.id, role: "SCHOOL_ADMIN" },
     update: {},
   });
 
   await prisma.userSchoolMembership.upsert({
-    where: { userId_schoolId: { userId: parent.id, schoolId: school.id } },
+    where: {
+      userId_schoolId_role: {
+        userId: parent.id,
+        schoolId: school.id,
+        role: "PARENT",
+      },
+    },
     create: { userId: parent.id, schoolId: school.id, role: "PARENT" },
     update: {},
   });
@@ -375,6 +397,124 @@ async function main() {
     create: { schoolId: school.id, parentId: parent.id, studentId: student.id, relation: "father" },
     update: {},
   });
+
+  // Second school — multi-school parent + employee-who-is-parent demos
+  const schoolB = await prisma.school.upsert({
+    where: { slug: "demo-school-b" },
+    create: {
+      name: "Demo School B",
+      slug: "demo-school-b",
+      timezone: "Asia/Kolkata",
+      campusLat: 13.0827,
+      campusLng: 80.2707,
+      campusRadiusM: 500,
+      planTier: "BASIC",
+    },
+    update: {},
+  });
+
+  await prisma.userSchoolMembership.upsert({
+    where: {
+      userId_schoolId_role: {
+        userId: parent.id,
+        schoolId: schoolB.id,
+        role: "PARENT",
+      },
+    },
+    create: { userId: parent.id, schoolId: schoolB.id, role: "PARENT" },
+    update: { isActive: true },
+  });
+
+  const gradeB = await prisma.grade.upsert({
+    where: { schoolId_name: { schoolId: schoolB.id, name: "Grade 5" } },
+    create: { schoolId: schoolB.id, name: "Grade 5", sortOrder: 5 },
+    update: {},
+  });
+
+  const sectionB = await prisma.classSection.upsert({
+    where: {
+      schoolId_gradeId_section: {
+        schoolId: schoolB.id,
+        gradeId: gradeB.id,
+        section: "A",
+      },
+    },
+    create: {
+      schoolId: schoolB.id,
+      gradeId: gradeB.id,
+      name: "Grade 5 - A",
+      grade: "5",
+      section: "A",
+    },
+    update: { name: "Grade 5 - A" },
+  });
+
+  const studentB = await prisma.student.upsert({
+    where: { id: "00000000-0000-4000-8000-000000000002" },
+    create: {
+      id: "00000000-0000-4000-8000-000000000002",
+      schoolId: schoolB.id,
+      classSectionId: sectionB.id,
+      name: "Demo Student B",
+      admissionNo: "STU-B001",
+    },
+    update: { classSectionId: sectionB.id, schoolId: schoolB.id },
+  });
+
+  await prisma.guardianRelationship.upsert({
+    where: { parentId_studentId: { parentId: parent.id, studentId: studentB.id } },
+    create: {
+      schoolId: schoolB.id,
+      parentId: parent.id,
+      studentId: studentB.id,
+      relation: "father",
+    },
+    update: {},
+  });
+
+  // Teacher who is also a parent (same school as primary demo)
+  const teacherParent = teacherUsers.get("teacher@demo.com");
+  if (teacherParent) {
+    const teacherChild = await prisma.student.upsert({
+      where: { id: "00000000-0000-4000-8000-000000000003" },
+      create: {
+        id: "00000000-0000-4000-8000-000000000003",
+        schoolId: school.id,
+        classSectionId: sectionA.id,
+        name: "Teacher Child",
+        admissionNo: "STU-T001",
+      },
+      update: { classSectionId: sectionA.id },
+    });
+
+    await prisma.userSchoolMembership.upsert({
+      where: {
+        userId_schoolId_role: {
+          userId: teacherParent.id,
+          schoolId: school.id,
+          role: "PARENT",
+        },
+      },
+      create: { userId: teacherParent.id, schoolId: school.id, role: "PARENT" },
+      update: { isActive: true },
+    });
+
+    await prisma.guardianRelationship.upsert({
+      where: {
+        parentId_studentId: {
+          parentId: teacherParent.id,
+          studentId: teacherChild.id,
+        },
+      },
+      create: {
+        schoolId: school.id,
+        parentId: teacherParent.id,
+        studentId: teacherChild.id,
+        relation: "father",
+      },
+      update: {},
+    });
+  }
 
   await prisma.teacherAssignment.deleteMany({ where: { schoolId: school.id } });
 
@@ -460,10 +600,13 @@ async function main() {
   console.log("System Admin: admin@classsync.app / admin123");
   console.log("School Admin: schooladmin@demo.com / school123");
   console.log("Teachers: teacher@demo.com … teacher10@demo.com / teacher123");
+  console.log("  (teacher@demo.com is also a parent — pick Employee or Parent after login)");
   console.log("Parent: parent@demo.com / parent123");
+  console.log("  (linked to children at Demo School + Demo School B)");
   console.log("Staff: driver@demo.com, security@demo.com, cleaner@demo.com / staff123");
   console.log("All demo employees include verified bank accounts and monthly salary records.");
-  console.log(`School ID: ${school.id}`);
+  console.log(`School ID (Demo School): ${school.id}`);
+  console.log(`School ID (Demo School B): ${schoolB.id}`);
   console.log("");
   console.log(`Timetable demo (${DEMO_DAYS_PER_WEEK} days × ${DEMO_PERIODS_PER_DAY} periods = ${DEMO_TOTAL_WEEKLY_SLOTS} slots/week):`);
   console.log(`  Global rules: Min Free/Week = ${DEMO_MIN_FREE_PER_WEEK}, Max Free/Week = ${DEMO_MAX_FREE_PER_WEEK}`);

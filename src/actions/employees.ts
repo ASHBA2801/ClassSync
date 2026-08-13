@@ -4,7 +4,7 @@ import { hash } from "bcryptjs";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import type { EmployeeJobType, EmploymentStatus, Prisma, Role } from "@prisma/client";
-import { prisma, withTenantContext } from "@/lib/db/prisma";
+import { prisma, upsertSchoolMembership, withTenantContext } from "@/lib/db/prisma";
 import {
   requireSchoolContext,
   requireSchoolPermission,
@@ -188,11 +188,7 @@ export async function createEmployeeAction(input: z.infer<typeof createEmployeeS
       update: { name: data.name, phone: data.phone },
     });
 
-    await tx.userSchoolMembership.upsert({
-      where: { userId_schoolId: { userId: user.id, schoolId: ctx.schoolId } },
-      create: { userId: user.id, schoolId: ctx.schoolId, role: platformRole },
-      update: { role: platformRole, isActive: true },
-    });
+    await upsertSchoolMembership(tx, user.id, ctx.schoolId, platformRole);
 
     return tx.employee.create({
       data: {
@@ -250,23 +246,39 @@ export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeS
     }
 
     if (data.jobType && data.jobType !== existing.jobType) {
+      const oldPlatformRole = getPlatformRoleForJobType(existing.jobType);
       const platformRole = getPlatformRoleForJobType(data.jobType);
-      await tx.userSchoolMembership.update({
-        where: { userId_schoolId: { userId: existing.userId, schoolId: ctx.schoolId } },
-        data: { role: platformRole },
-      });
+
+      if (oldPlatformRole !== platformRole) {
+        await tx.userSchoolMembership.updateMany({
+          where: {
+            userId: existing.userId,
+            schoolId: ctx.schoolId,
+            role: oldPlatformRole,
+          },
+          data: { isActive: false },
+        });
+        await upsertSchoolMembership(tx, existing.userId, ctx.schoolId, platformRole);
+      }
     }
 
     if (data.employmentStatus === "TERMINATED") {
-      await tx.userSchoolMembership.update({
-        where: { userId_schoolId: { userId: existing.userId, schoolId: ctx.schoolId } },
+      const platformRole = getPlatformRoleForJobType(
+        data.jobType ?? existing.jobType,
+      );
+      await tx.userSchoolMembership.updateMany({
+        where: {
+          userId: existing.userId,
+          schoolId: ctx.schoolId,
+          role: platformRole,
+        },
         data: { isActive: false },
       });
     } else if (data.employmentStatus === "ACTIVE") {
-      await tx.userSchoolMembership.update({
-        where: { userId_schoolId: { userId: existing.userId, schoolId: ctx.schoolId } },
-        data: { isActive: true },
-      });
+      const platformRole = getPlatformRoleForJobType(
+        data.jobType ?? existing.jobType,
+      );
+      await upsertSchoolMembership(tx, existing.userId, ctx.schoolId, platformRole);
     }
 
     return tx.employee.update({
@@ -347,7 +359,7 @@ export async function upsertEmployeeSalaryAction(input: z.infer<typeof salarySch
 
 export async function upsertEmployeeBankAccountAction(input: z.infer<typeof bankAccountSchema>) {
   const ctx = await requireSchoolPermission(PERMISSIONS.EMPLOYEES_MANAGE);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
   const data = bankAccountSchema.parse(input);
 
   if (!validateIfsc(data.ifsc)) throw new Error("Invalid IFSC code");
@@ -411,7 +423,7 @@ export async function upsertEmployeeBankAccountAction(input: z.infer<typeof bank
 
 export async function verifyEmployeeBankAccountAction(employeeId: string) {
   const ctx = await requireSchoolPermission(PERMISSIONS.BANK_DETAILS_VIEW);
-  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId);
+  await revalidateSessionForSensitiveOp(ctx.userId, ctx.schoolId, ctx.role);
 
   await withTenantContext(ctx.schoolId, async (tx) => {
     const account = await tx.employeeBankAccount.findFirst({

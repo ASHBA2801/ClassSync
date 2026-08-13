@@ -19,8 +19,20 @@ interface Student {
   name: string;
 }
 
-export function ParentLeaveForm({ students }: { students: Student[] }) {
-  const [studentId, setStudentId] = useState("");
+export function ParentLeaveForm({
+  students,
+  defaultStudentId,
+}: {
+  students: Student[];
+  defaultStudentId?: string;
+}) {
+  const [studentId, setStudentId] = useState(
+    () => defaultStudentId && students.some((s) => s.id === defaultStudentId)
+      ? defaultStudentId
+      : students.length === 1
+        ? students[0]!.id
+        : "",
+  );
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [done, setDone] = useState(false);

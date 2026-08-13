@@ -1,4 +1,4 @@
-import { PortalShell } from "@/components/portal-shell";
+import { ParentPortalShell } from "@/components/parent-portal-shell";
 import { getSessionContext } from "@/lib/rbac/guard";
 import { redirect } from "next/navigation";
 import {
@@ -19,9 +19,9 @@ export default async function ParentFeesPage() {
   ]);
 
   return (
-    <PortalShell title="Fees & Payments" navItems={parentNav} userName={ctx.name}>
+    <ParentPortalShell title="Fees & Payments" navItems={parentNav} userName={ctx.name}>
       <PaymentBanner />
       <PaymentList invoices={invoices} providers={providers} />
-    </PortalShell>
+    </ParentPortalShell>
   );
 }

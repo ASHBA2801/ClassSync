@@ -3,8 +3,9 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma, withTenantContext } from "@/lib/db/prisma";
-import { requireSchoolContext } from "@/lib/rbac/guard";
+import { requireSchoolContext, requireSchoolPermission } from "@/lib/rbac/guard";
 import { hasCapability, CAPABILITIES } from "@/lib/employees/capabilities";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 import type { EmployeeJobType } from "@prisma/client";
 import { checkGeofence } from "@/lib/geofence";
 import { getAttendanceQueue } from "@/lib/queue/queues";
@@ -14,6 +15,12 @@ import {
   ATTENDANCE_MAX_ATTEMPTS,
   getNextAttemptNumber,
 } from "@/lib/attendance/face-attendance";
+import {
+  buildS3Key,
+  getPresignedDownloadUrl,
+  getPresignedUploadUrl,
+  putObject,
+} from "@/lib/storage/s3";
 
 async function getStaffEmployee() {
   const ctx = await requireSchoolContext();
@@ -111,26 +118,114 @@ export async function assignDriverToRouteAction(routeId: string, targetEmployeeI
 const visitorSchema = z.object({
   visitorName: z.string().min(1),
   purpose: z.string().min(1),
-  phone: z.string().optional(),
+  phone: z.string().min(7, "Mobile number is required"),
   notes: z.string().optional(),
+  photoS3Key: z.string().min(1, "Visitor photo is required"),
 });
+
+const visitorPhotoUploadSchema = z.object({
+  filename: z.string().min(1),
+  mimeType: z.string().min(1),
+});
+
+export type VisitorLogView = {
+  id: string;
+  visitorName: string;
+  purpose: string;
+  phone: string | null;
+  photoUrl: string | null;
+  checkInAt: string;
+  checkOutAt: string | null;
+  notes: string | null;
+  loggedBy: { name: string };
+};
+
+async function mapVisitorLogsWithPhotos(
+  logs: Array<{
+    id: string;
+    visitorName: string;
+    purpose: string;
+    phone: string | null;
+    photoS3Key: string | null;
+    checkInAt: Date;
+    checkOutAt: Date | null;
+    notes: string | null;
+    loggedBy: { name: string };
+  }>,
+): Promise<VisitorLogView[]> {
+  return Promise.all(
+    logs.map(async (log) => ({
+      id: log.id,
+      visitorName: log.visitorName,
+      purpose: log.purpose,
+      phone: log.phone,
+      photoUrl: log.photoS3Key ? await getPresignedDownloadUrl(log.photoS3Key) : null,
+      checkInAt: log.checkInAt.toISOString(),
+      checkOutAt: log.checkOutAt?.toISOString() ?? null,
+      notes: log.notes,
+      loggedBy: log.loggedBy,
+    })),
+  );
+}
+
+export async function getVisitorPhotoUploadUrlAction(
+  input: z.infer<typeof visitorPhotoUploadSchema>,
+) {
+  const { ctx, employee } = await getStaffEmployee();
+  assertCapability(employee.jobType, CAPABILITIES.SECURITY_VISITOR_LOG);
+  const data = visitorPhotoUploadSchema.parse(input);
+
+  const mimeType = data.mimeType.startsWith("image/")
+    ? data.mimeType
+    : "image/jpeg";
+  const key = buildS3Key(`visitors/${ctx.schoolId}`, data.filename);
+  const uploadUrl = await getPresignedUploadUrl(key, mimeType);
+  return { uploadUrl, key };
+}
+
+/** Upload a camera-captured image (base64) and return the S3 key. */
+export async function uploadVisitorPhotoBase64Action(imageBase64: string) {
+  const { ctx, employee } = await getStaffEmployee();
+  assertCapability(employee.jobType, CAPABILITIES.SECURITY_VISITOR_LOG);
+
+  const raw = imageBase64.includes(",")
+    ? imageBase64.split(",")[1]!
+    : imageBase64;
+  const buffer = Buffer.from(raw, "base64");
+  if (buffer.length < 100) throw new Error("Invalid photo");
+  if (buffer.length > 5 * 1024 * 1024) throw new Error("Photo too large (max 5MB)");
+
+  const key = buildS3Key(`visitors/${ctx.schoolId}`, "visitor.jpg");
+  await putObject(key, buffer, "image/jpeg");
+  return { key };
+}
 
 export async function logVisitorAction(input: z.infer<typeof visitorSchema>) {
   const { ctx, employee } = await getStaffEmployee();
   assertCapability(employee.jobType, CAPABILITIES.SECURITY_VISITOR_LOG);
   const data = visitorSchema.parse(input);
 
+  if (!data.photoS3Key.startsWith(`visitors/${ctx.schoolId}/`)) {
+    throw new Error("Invalid photo key");
+  }
+
   await withTenantContext(ctx.schoolId, async (tx) => {
     await tx.securityVisitorLog.create({
       data: {
         schoolId: ctx.schoolId,
         loggedById: ctx.userId,
-        ...data,
+        visitorName: data.visitorName,
+        purpose: data.purpose,
+        phone: data.phone,
+        photoS3Key: data.photoS3Key,
+        notes: data.notes,
       },
     });
   });
 
   revalidatePath("/staff/security");
+  revalidatePath("/staff/security/logs");
+  revalidatePath("/admin/visitor-logs");
   return { success: true };
 }
 
@@ -146,21 +241,40 @@ export async function checkoutVisitorAction(visitorLogId: string) {
   });
 
   revalidatePath("/staff/security");
+  revalidatePath("/staff/security/logs");
+  revalidatePath("/admin/visitor-logs");
   return { success: true };
 }
 
-export async function listVisitorLogsAction() {
+export async function listVisitorLogsAction(): Promise<VisitorLogView[]> {
   const { ctx, employee } = await getStaffEmployee();
   assertCapability(employee.jobType, CAPABILITIES.SECURITY_VISITOR_LOG);
 
-  return withTenantContext(ctx.schoolId, async (tx) =>
+  const logs = await withTenantContext(ctx.schoolId, async (tx) =>
     tx.securityVisitorLog.findMany({
       where: { schoolId: ctx.schoolId },
       include: { loggedBy: { select: { name: true } } },
       orderBy: { checkInAt: "desc" },
-      take: 50,
+      take: 100,
     }),
   );
+
+  return mapVisitorLogsWithPhotos(logs);
+}
+
+export async function listAdminVisitorLogsAction(): Promise<VisitorLogView[]> {
+  const ctx = await requireSchoolPermission(PERMISSIONS.AUDIT_VIEW);
+
+  const logs = await withTenantContext(ctx.schoolId, async (tx) =>
+    tx.securityVisitorLog.findMany({
+      where: { schoolId: ctx.schoolId },
+      include: { loggedBy: { select: { name: true } } },
+      orderBy: { checkInAt: "desc" },
+      take: 200,
+    }),
+  );
+
+  return mapVisitorLogsWithPhotos(logs);
 }
 
 // Cleaner tasks
