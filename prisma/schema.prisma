@@ -141,6 +141,7 @@ enum StudentAttendanceStatus {
   PRESENT
   ABSENT
   LATE
+  HALF_DAY
 }
 
 enum DocumentStatus {
@@ -154,6 +155,7 @@ enum DocumentType {
   BIRTH_CERTIFICATE
   COMMUNITY_CERTIFICATE
   MARKSHEET
+  MEDICAL_CERTIFICATE
 }
 
 enum UploaderType {
@@ -540,44 +542,53 @@ model AttendanceAttempt {
 }
 
 model StudentAttendance {
-  id        String                  @id @default(uuid()) @db.Uuid
-  schoolId  String                  @db.Uuid
-  studentId String                  @db.Uuid
-  date      DateTime                @db.Date
-  status    StudentAttendanceStatus
-  markedBy  String?                 @db.Uuid
-  createdAt DateTime                @default(now())
+  id             String                  @id @default(uuid()) @db.Uuid
+  schoolId       String                  @db.Uuid
+  studentId      String                  @db.Uuid
+  date           DateTime                @db.Date
+  status         StudentAttendanceStatus
+  session        String?
+  notes          String?
+  leaveRequestId String?                 @db.Uuid
+  markedBy       String?                 @db.Uuid
+  createdAt      DateTime                @default(now())
 
-  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  leaveRequest LeaveRequest? @relation(fields: [leaveRequestId], references: [id], onDelete: SetNull)
 
   @@unique([schoolId, studentId, date])
   @@index([schoolId, date])
 }
 
 model LeaveRequest {
-  id            String             @id @default(uuid()) @db.Uuid
-  schoolId      String             @db.Uuid
-  requesterId   String             @db.Uuid
-  requesterType LeaveRequesterType
-  studentId     String?            @db.Uuid
-  startDate     DateTime           @db.Date
-  endDate       DateTime           @db.Date
-  reason        String
-  leaveType     LeaveType          @default(REGULAR)
-  status        LeaveStatus        @default(PENDING)
-  reviewedBy    String?            @db.Uuid
-  reviewedAt    DateTime?
-  reviewNote              String?
-  substitutionsGenerated  Boolean            @default(false)
-  alteredClassCount       Int?
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
+  id                     String             @id @default(uuid()) @db.Uuid
+  schoolId               String             @db.Uuid
+  requesterId            String             @db.Uuid
+  requesterType          LeaveRequesterType
+  studentId              String?            @db.Uuid
+  startDate              DateTime           @db.Date
+  endDate                DateTime           @db.Date
+  reason                 String
+  leaveType              LeaveType          @default(REGULAR)
+  isHalfDay              Boolean            @default(false)
+  halfDaySession         String?
+  medicalCertS3Key       String?
+  medicalCertName        String?
+  status                 LeaveStatus        @default(PENDING)
+  reviewedBy             String?            @db.Uuid
+  reviewedAt             DateTime?
+  reviewNote             String?
+  substitutionsGenerated Boolean            @default(false)
+  alteredClassCount      Int?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 
-  school       School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  requester    User                 @relation(fields: [requesterId], references: [id], onDelete: Cascade)
-  student      Student?             @relation(fields: [studentId], references: [id])
-  alterations  ScheduleAlteration[]
+  school             School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  requester          User                 @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  student            Student?             @relation(fields: [studentId], references: [id])
+  alterations        ScheduleAlteration[]
+  studentAttendances StudentAttendance[]
 
   @@index([schoolId, status])
 }
