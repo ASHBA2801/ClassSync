@@ -5,8 +5,9 @@ import { getLinkedStudentsAction, listParentDocumentsAction } from "@/actions/pa
 import { getPresignedDownloadUrl } from "@/lib/storage/s3";
 import { DocumentUploadForm } from "./document-upload";
 import { DocumentList } from "@/components/documents/document-list";
+import { RefreshDocumentsButton } from "@/components/documents/refresh-documents-button";
 import { parentNav } from "@/lib/nav-config";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function DocumentsPage() {
   const ctx = await getSessionContext();
@@ -30,7 +31,13 @@ export default async function DocumentsPage() {
         />
         <Card>
           <CardHeader>
-            <CardTitle>Student documents & extracted details</CardTitle>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <CardTitle>Student documents & extracted details</CardTitle>
+              <RefreshDocumentsButton />
+            </div>
+            <CardDescription>
+              Refresh to check the status of a document you uploaded. Extracted details appear here when processing finishes.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <DocumentList

@@ -4,7 +4,6 @@ export type NavIconName =
   | "layout-dashboard"
   | "school"
   | "users"
-  | "key"
   | "activity"
   | "user-check"
   | "graduation-cap"
@@ -28,8 +27,8 @@ export interface NavItem {
 export const systemAdminNav: NavItem[] = [
   { href: "/system", label: "Dashboard", icon: "layout-dashboard" },
   { href: "/system/schools", label: "Schools", icon: "school" },
+  { href: "/system/billing", label: "Core Pricing", icon: "dollar-sign" },
   { href: "/system/users", label: "Global Users", icon: "users" },
-  { href: "/system/ai-keys", label: "AI Keys", icon: "key" },
   { href: "/system/monitoring", label: "Monitoring", icon: "activity" },
 ];
 
@@ -45,6 +44,7 @@ export const schoolAdminNav: NavItem[] = [
   { href: "/admin/visitor-logs", label: "Entry Logs", icon: "file-text" },
   { href: "/admin/leave", label: "Leave Requests", icon: "file-text" },
   { href: "/admin/fees", label: "Fees", icon: "dollar-sign" },
+  { href: "/admin/billing", label: "Core Billing", icon: "credit-card" },
   { href: "/admin/employees/payroll", label: "Payroll", icon: "credit-card" },
   { href: "/admin/employees/payouts", label: "Payout History", icon: "file-text" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },

@@ -25,7 +25,7 @@ export function verifyStripeWebhook(
 
 export const stripeAdapter: PaymentAdapter = {
   provider: "STRIPE",
-  async createOrder(config, amount, invoiceId, receipt, schoolId) {
+  async createOrder(config, amount, invoiceId, receipt, schoolId, options) {
     const stripe = createStripeClient(config);
     const appUrl = getAppUrl();
 
@@ -36,15 +36,15 @@ export const stripeAdapter: PaymentAdapter = {
         {
           price_data: {
             currency: "inr",
-            product_data: { name: `Fee Payment (${receipt})` },
+            product_data: { name: options?.productName ?? `Fee Payment (${receipt})` },
             unit_amount: Math.round(amount * 100),
           },
           quantity: 1,
         },
       ],
       metadata: { invoiceId, schoolId },
-      success_url: `${appUrl}/parent/fees`,
-      cancel_url: `${appUrl}/parent/fees/payment-cancel`,
+      success_url: `${appUrl}${options?.returnPath ?? "/parent/fees"}`,
+      cancel_url: `${appUrl}${options?.returnPath ?? "/parent/fees"}`,
     });
 
     if (!session.url) {

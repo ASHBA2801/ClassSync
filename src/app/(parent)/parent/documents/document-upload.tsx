@@ -81,7 +81,13 @@ export function DocumentUploadForm({
       });
 
       setDone(true);
-      setStudentId("");
+      setStudentId(
+        defaultStudentId && students.some((s) => s.id === defaultStudentId)
+          ? defaultStudentId
+          : students.length === 1
+            ? students[0]!.id
+            : "",
+      );
       setDocumentType("");
       setRelation("");
       try {
@@ -155,7 +161,11 @@ export function DocumentUploadForm({
               <p className="text-sm text-muted">Please upload a single, clear document in focus — this improves extraction accuracy.</p>
             </div>
           {error && <p className="text-sm text-danger">{error}</p>}
-          {done && <p className="text-sm text-success">Document uploaded — extracted details will appear below once processing finishes.</p>}
+          {done && (
+            <p className="text-sm text-success">
+              Document uploaded. We are processing it — use Refresh below to check the status.
+            </p>
+          )}
           <Button type="submit" disabled={loading}>
             {loading ? "Uploading..." : "Upload"}
           </Button>

@@ -32,7 +32,7 @@ function getAppUrl(): string {
 
 export const phonepeAdapter: PaymentAdapter = {
   provider: "PHONEPE",
-  async createOrder(config, amount, invoiceId, receipt, schoolId) {
+  async createOrder(config, amount, invoiceId, receipt, schoolId, options) {
     const mode = (config.configJson?.mode as string) ?? "sandbox";
     const baseUrl = getPhonePeBaseUrl(mode);
     const saltIndex = getSaltIndex(config);
@@ -44,7 +44,7 @@ export const phonepeAdapter: PaymentAdapter = {
       merchantTransactionId,
       merchantUserId: schoolId.slice(0, 8),
       amount: Math.round(amount * 100),
-      redirectUrl: `${appUrl}/parent/fees`,
+      redirectUrl: `${appUrl}${options?.returnPath ?? "/parent/fees"}`,
       redirectMode: "REDIRECT",
       callbackUrl: `${appUrl}/api/webhooks/phonepe/${schoolId}`,
       mobileNumber: "9999999999",
