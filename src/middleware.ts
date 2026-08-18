@@ -32,6 +32,14 @@ export default auth((req) => {
 
   const role = session.user.role;
   const needsContext = session.user.needsContext === true;
+  const forcePasswordChange = session.user.forcePasswordChange === true;
+
+  if (forcePasswordChange) {
+    if (pathname.startsWith("/account/password") || pathname.startsWith("/api/auth")) {
+      return NextResponse.next();
+    }
+    return NextResponse.redirect(new URL("/account/password", req.url));
+  }
 
   // Context picker is always reachable while authenticated
   if (pathname.startsWith("/select-context")) {

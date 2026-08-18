@@ -19,6 +19,7 @@ declare module "next-auth" {
     permissions: string[];
     activeStudentId?: string | null;
     needsContext?: boolean;
+    forcePasswordChange?: boolean;
   }
 
   interface Session {
@@ -28,6 +29,7 @@ declare module "next-auth" {
       sessionStarted?: number;
       activeStudentId?: string | null;
       needsContext?: boolean;
+      forcePasswordChange?: boolean;
     };
   }
 }
@@ -40,6 +42,7 @@ declare module "@auth/core/jwt" {
     permissions: string[];
     activeStudentId?: string | null;
     needsContext?: boolean;
+    forcePasswordChange?: boolean;
   }
 }
 
@@ -123,6 +126,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           permissions,
           activeStudentId,
           needsContext,
+          forcePasswordChange: user.forcePasswordChange,
         };
       },
     }),
@@ -132,11 +136,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id!;
+        token.sub = user.id;
         token.role = user.role;
         token.schoolId = user.schoolId;
         token.permissions = user.permissions;
         token.activeStudentId = user.activeStudentId ?? null;
         token.needsContext = user.needsContext ?? false;
+        token.forcePasswordChange = user.forcePasswordChange ?? false;
       }
 
       if (trigger === "update" && session) {
@@ -145,10 +151,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           schoolId?: string | null;
           activeStudentId?: string | null;
           needsContext?: boolean;
+          forcePasswordChange?: boolean;
         };
 
+        if (input.forcePasswordChange !== undefined) {
+          token.forcePasswordChange = input.forcePasswordChange;
+        }
+
         if (input.role !== undefined) {
-          const resolved = await resolveContextSwitch(token.id, {
+          const resolved = await resolveContextSwitch(token.id ?? token.sub!, {
             role: input.role,
             schoolId: input.schoolId ?? null,
             activeStudentId: input.activeStudentId,

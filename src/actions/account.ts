@@ -43,27 +43,42 @@ export async function updateProfileAction(input: { name: string; phone?: string 
 }
 
 export async function changePasswordAction(input: {
-  currentPassword: string;
+  currentPassword?: string;
   newPassword: string;
+  forced?: boolean;
 }) {
   const ctx = await requireAuth();
   const user = await prisma.user.findUnique({
     where: { id: ctx.userId },
-    select: { passwordHash: true },
+    select: { passwordHash: true, forcePasswordChange: true },
   });
 
   if (!user) return { error: "User not found." };
 
-  const valid = await compare(input.currentPassword, user.passwordHash);
-  if (!valid) return { error: "Current password is incorrect." };
-
-  if (input.newPassword.length < 8) {
+  const newPassword = input.newPassword.trim();
+  if (newPassword.length < 8) {
     return { error: "New password must be at least 8 characters." };
+  }
+
+  // First-login: the user already authenticated with the temporary password.
+  // Skip re-checking it so a successful save can continue even if the form
+  // is submitted again after the flag was already cleared.
+  if (input.forced) {
+    if (!user.forcePasswordChange) {
+      return { success: true, alreadyComplete: true };
+    }
+  } else {
+    const currentPassword = input.currentPassword ?? "";
+    const valid = await compare(currentPassword, user.passwordHash);
+    if (!valid) return { error: "Current password is incorrect." };
   }
 
   await prisma.user.update({
     where: { id: ctx.userId },
-    data: { passwordHash: await hash(input.newPassword, 12) },
+    data: {
+      passwordHash: await hash(newPassword, 12),
+      forcePasswordChange: false,
+    },
   });
 
   return { success: true };

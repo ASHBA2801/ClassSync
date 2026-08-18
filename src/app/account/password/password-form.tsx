@@ -1,24 +1,35 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { changePasswordAction } from "@/actions/account";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
-export function PasswordForm() {
+export function PasswordForm({ forced = false }: { forced?: boolean }) {
+  const { update } = useSession();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  async function continueAfterChange() {
+    await update({ forcePasswordChange: false });
+    router.replace("/select-context");
+    router.refresh();
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setLoading(true);
     setMessage(null);
 
-    const formData = new FormData(e.currentTarget);
-    const currentPassword = formData.get("currentPassword") as string;
-    const newPassword = formData.get("newPassword") as string;
-    const confirmPassword = formData.get("confirmPassword") as string;
+    const formData = new FormData(form);
+    const currentPassword = (formData.get("currentPassword") as string | null) ?? "";
+    const newPassword = (formData.get("newPassword") as string).trim();
+    const confirmPassword = (formData.get("confirmPassword") as string).trim();
 
     if (newPassword !== confirmPassword) {
       setLoading(false);
@@ -26,24 +37,37 @@ export function PasswordForm() {
       return;
     }
 
-    const result = await changePasswordAction({ currentPassword, newPassword });
-    setLoading(false);
+    const result = await changePasswordAction({
+      currentPassword: forced ? undefined : currentPassword,
+      newPassword,
+      forced,
+    });
 
     if (result.error) {
+      setLoading(false);
       setMessage({ type: "error", text: result.error });
       return;
     }
 
-    e.currentTarget.reset();
+    form.reset();
     setMessage({ type: "success", text: "Password changed successfully." });
+
+    if (forced) {
+      await continueAfterChange();
+      return;
+    }
+
+    setLoading(false);
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="space-y-2">
-        <Label htmlFor="currentPassword">Current password</Label>
-        <PasswordInput id="currentPassword" name="currentPassword" required />
-      </div>
+      {!forced && (
+        <div className="space-y-2">
+          <Label htmlFor="currentPassword">Current password</Label>
+          <PasswordInput id="currentPassword" name="currentPassword" required />
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="newPassword">New password</Label>
@@ -78,7 +102,7 @@ export function PasswordForm() {
       )}
 
       <Button type="submit" disabled={loading}>
-        {loading ? "Updating…" : "Update password"}
+        {loading ? "Updating…" : forced ? "Set new password" : "Update password"}
       </Button>
     </form>
   );

@@ -267,14 +267,15 @@ model School {
 }
 
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  passwordHash String
-  name         String
-  phone        String?
-  faceImageKey String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                   String   @id @default(uuid()) @db.Uuid
+  email                String   @unique
+  passwordHash         String
+  name                 String
+  phone                String?
+  faceImageKey         String?
+  forcePasswordChange  Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   memberships           UserSchoolMembership[]
   guardianRelationships GuardianRelationship[]
@@ -334,6 +335,8 @@ model Student {
   schoolId       String   @db.Uuid
   classSectionId String?  @db.Uuid
   name           String
+  fatherName     String?
+  motherName     String?
   dob            DateTime?
   admissionNo    String?
   createdAt      DateTime @default(now())

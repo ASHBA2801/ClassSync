@@ -36,6 +36,7 @@ export const schoolAdminNav: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: "layout-dashboard" },
   { href: "/admin/employees", label: "Employees", icon: "users" },
   { href: "/admin/students", label: "Students", icon: "graduation-cap" },
+  { href: "/admin/parents", label: "Parents", icon: "users" },
   { href: "/admin/classes", label: "Classes", icon: "book-open" },
   { href: "/admin/schedule/setup", label: "Timetable Setup", icon: "calendar-days" },
   { href: "/admin/schedule", label: "Schedule", icon: "calendar" },
