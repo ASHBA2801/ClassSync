@@ -13,7 +13,12 @@ export default async function DocumentsPage() {
   if (!ctx || ctx.role !== "PARENT") redirect("/login");
 
   const students = await getLinkedStudentsAction();
-  const documents = await listParentDocumentsAction();
+  let documents: Awaited<ReturnType<typeof listParentDocumentsAction>> = [];
+  try {
+    documents = await listParentDocumentsAction();
+  } catch (error) {
+    console.error("Failed to load parent documents", error);
+  }
   const docsWithUrls = await Promise.all(
     documents.map(async (d) => ({
       ...d,

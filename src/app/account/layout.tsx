@@ -7,8 +7,12 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const ctx = await getSessionContext();
   if (!ctx) redirect("/login");
 
+  const navItems = ctx.forcePasswordChange
+    ? [{ href: "/account/password", label: "Change password", icon: "key" as const }]
+    : getNavForRole(ctx.role);
+
   return (
-    <PortalShell title="Account" navItems={getNavForRole(ctx.role)} userName={ctx.name}>
+    <PortalShell title="Account" navItems={navItems} userName={ctx.name}>
       <div className="mx-auto max-w-2xl">{children}</div>
     </PortalShell>
   );

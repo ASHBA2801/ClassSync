@@ -11,6 +11,7 @@ import { dispatchDocumentProcessing } from "@/lib/jobs/dispatch";
 import { applyLeaveSubstitutions } from "@/lib/scheduler/smart-scheduler";
 import { parseIsoDate } from "@/lib/calendar/working-days";
 import { isoDateString } from "@/lib/schemas/date";
+import { findManyDocuments } from "@/lib/documents/query";
 
 /** Children linked in the active school (tenant-scoped portal data). */
 export async function getLinkedStudentsAction() {
@@ -192,7 +193,7 @@ export async function listParentLeaveRequestsAction() {
 export async function listPendingDocumentsAction() {
   const ctx = await requireSchoolPermission(PERMISSIONS.DOCUMENTS_REVIEW);
   return withTenantContext(ctx.schoolId, async (tx) => {
-    return tx.document.findMany({
+    return findManyDocuments(tx, {
       where: { schoolId: ctx.schoolId, status: "PENDING" },
       include: { student: true },
       orderBy: { createdAt: "desc" },
@@ -207,7 +208,7 @@ export async function listParentDocumentsAction() {
     const relationships = await tx.guardianRelationship.findMany({ where: { parentId: ctx.userId, schoolId: ctx.schoolId } });
     const studentIds = relationships.map((r) => r.studentId);
 
-    return tx.document.findMany({
+    return findManyDocuments(tx, {
       where: {
         schoolId: ctx.schoolId,
         OR: [{ uploadedBy: ctx.userId }, { studentId: { in: studentIds } }],
@@ -241,7 +242,7 @@ export async function listTeacherStudentDocumentsAction() {
     const studentIds = students.map((s) => s.id);
     if (studentIds.length === 0) return [];
 
-    return tx.document.findMany({
+    return findManyDocuments(tx, {
       where: {
         schoolId: ctx.schoolId,
         studentId: { in: studentIds },

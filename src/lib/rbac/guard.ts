@@ -1,4 +1,5 @@
 import type { Role } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { prisma, findSchoolMembership, withSystemAdminContext } from "@/lib/db/prisma";
@@ -13,18 +14,39 @@ export interface SessionContext {
   permissions: string[];
   activeStudentId: string | null;
   needsContext: boolean;
+  forcePasswordChange: boolean;
+}
+
+async function resolveCanonicalUser(sessionUser: {
+  id?: string;
+  email?: string | null;
+}): Promise<{ id: string; forcePasswordChange: boolean } | null> {
+  if (sessionUser.email) {
+    const dbUser = await withSystemAdminContext(async (tx) =>
+      tx.user.findUnique({
+        where: { email: sessionUser.email! },
+        select: { id: true, forcePasswordChange: true },
+      }),
+    );
+    if (dbUser) return dbUser;
+  }
+  if (!sessionUser.id) return null;
+  return { id: sessionUser.id, forcePasswordChange: false };
 }
 
 export async function getSessionContext(): Promise<SessionContext | null> {
   const session = await auth();
   if (!session?.user) return null;
 
+  const dbUser = await resolveCanonicalUser(session.user);
+  if (!dbUser) return null;
+
   const role = session.user.role as Role;
   // Refresh from DB on the server (Node runtime) — avoids stale JWT permissions
   const permissions = await getPermissionsForRole(role);
 
   return {
-    userId: session.user.id,
+    userId: dbUser.id,
     email: session.user.email!,
     name: session.user.name!,
     schoolId: session.user.schoolId ?? null,
@@ -32,6 +54,7 @@ export async function getSessionContext(): Promise<SessionContext | null> {
     permissions,
     activeStudentId: session.user.activeStudentId ?? null,
     needsContext: session.user.needsContext ?? false,
+    forcePasswordChange: dbUser.forcePasswordChange,
   };
 }
 
@@ -78,7 +101,7 @@ export async function requireSchoolContext(): Promise<SessionContext & { schoolI
   );
 
   if (memberships.length === 0) {
-    throw new ForbiddenError("School context required");
+    redirect("/login");
   }
 
   let schoolId: string | null = null;
@@ -99,7 +122,7 @@ export async function requireSchoolContext(): Promise<SessionContext & { schoolI
   }
 
   if (!schoolId) {
-    throw new ForbiddenError("School context required for active role");
+    redirect("/select-context");
   }
 
   const school = await prisma.school.findUnique({
@@ -107,7 +130,7 @@ export async function requireSchoolContext(): Promise<SessionContext & { schoolI
     select: { id: true },
   });
   if (!school) {
-    throw new ForbiddenError("School context is no longer valid. Please sign in again.");
+    redirect("/select-context");
   }
 
   return { ...ctx, schoolId };

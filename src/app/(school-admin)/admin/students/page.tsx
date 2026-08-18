@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { schoolAdminNav } from "@/lib/nav-config";
+import Link from "next/link";
 
 export default async function StudentsPage() {
   const ctx = await getSessionContext();
@@ -25,7 +26,12 @@ export default async function StudentsPage() {
           <CardContent><CreateStudentForm classes={classes} /></CardContent>
         </Card>
         <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>Students ({students.length})</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle>Students ({students.length})</CardTitle>
+            <Link href="/admin/parents" className="text-sm font-medium text-primary hover:underline">
+              Bulk parent upload
+            </Link>
+          </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
