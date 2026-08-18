@@ -138,8 +138,8 @@ export function DocumentList({
                 </dl>
               ) : (
                 <p className="text-sm text-text-2">
-                  {doc.status === "PENDING"
-                    ? "Extraction in progress or awaiting a clearer upload."
+                  {doc.status === "PENDING" && !doc.reviewNote
+                    ? "We are processing your document."
                     : "No extracted details available."}
                 </p>
               )}

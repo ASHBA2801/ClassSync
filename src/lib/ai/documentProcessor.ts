@@ -33,6 +33,59 @@ function normalizeResponseText(resp: any) {
   return "";
 }
 
+const AZURE_ATTEMPTS = 3;
+const AZURE_TIMEOUT_MS = 180_000;
+
+function isRetryableAzureError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const cause = (err as Error & { cause?: { code?: string } }).cause;
+  const code = cause?.code ?? "";
+  return (
+    code === "UND_ERR_CONNECT_TIMEOUT" ||
+    code === "UND_ERR_HEADERS_TIMEOUT" ||
+    code === "ECONNRESET" ||
+    err.message.includes("fetch failed") ||
+    err.name === "AbortError" ||
+    err.name === "TimeoutError"
+  );
+}
+
+async function fetchAzure(url: string, body: string, azureKey: string): Promise<Response> {
+  let dispatcher: unknown;
+  try {
+    const undici = await import("undici");
+    dispatcher = new undici.Agent({
+      connectTimeout: 30_000,
+      headersTimeout: AZURE_TIMEOUT_MS,
+      bodyTimeout: AZURE_TIMEOUT_MS,
+    });
+  } catch {
+    dispatcher = undefined;
+  }
+
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= AZURE_ATTEMPTS; attempt++) {
+    try {
+      return await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": azureKey,
+        },
+        body,
+        signal: AbortSignal.timeout(AZURE_TIMEOUT_MS),
+        ...(dispatcher ? { dispatcher } : {}),
+      } as RequestInit);
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryableAzureError(err) || attempt === AZURE_ATTEMPTS) throw err;
+      console.warn(`[document] Azure request attempt ${attempt} failed, retrying...`);
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+  throw lastErr;
+}
+
 async function updateDocumentRecord(documentId: string, data: any) {
   try {
     await prisma.document.update({ where: { id: documentId }, data });
@@ -126,14 +179,7 @@ export async function processDocument(params: Params) {
 
   let responseJson: any;
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": azureKey,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const response = await fetchAzure(url, JSON.stringify(requestBody), azureKey);
 
     if (!response.ok) {
       const text = await response.text();
