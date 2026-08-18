@@ -53,6 +53,7 @@ function isRetryableAzureError(err: unknown): boolean {
 async function fetchAzure(url: string, body: string, azureKey: string): Promise<Response> {
   let dispatcher: unknown;
   try {
+    // @ts-ignore - undici is optionally available in Node environments
     const undici = await import("undici");
     dispatcher = new undici.Agent({
       connectTimeout: 30_000,
