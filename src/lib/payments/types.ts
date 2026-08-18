@@ -150,5 +150,6 @@ export interface PaymentAdapter {
     invoiceId: string,
     receipt: string,
     schoolId: string,
+    options?: { returnPath?: string; productName?: string },
   ): Promise<PaymentOrderResult>;
 }

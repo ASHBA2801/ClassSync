@@ -165,6 +165,35 @@ async function main() {
   console.log("Seeding permissions...");
   await seedPermissions();
 
+  console.log("Seeding core pricing plans...");
+  const defaultPlans = [
+    {
+      name: "50 Users",
+      description: "Core ClassSync module for up to 50 login users (admins, teachers, staff, and parents).",
+      maxUsers: 50,
+      priceAmount: 24999,
+      sortOrder: 1,
+    },
+    {
+      name: "100 Users",
+      description: "Core ClassSync module for up to 100 login users (admins, teachers, staff, and parents).",
+      maxUsers: 100,
+      priceAmount: 44999,
+      sortOrder: 2,
+    },
+  ];
+  for (const plan of defaultPlans) {
+    const existing = await prisma.corePricingPlan.findFirst({ where: { maxUsers: plan.maxUsers } });
+    if (existing) {
+      await prisma.corePricingPlan.update({
+        where: { id: existing.id },
+        data: { name: plan.name, description: plan.description, sortOrder: plan.sortOrder, isActive: true },
+      });
+    } else {
+      await prisma.corePricingPlan.create({ data: plan });
+    }
+  }
+
   const passwordHash = await hash("admin123", 12);
   const teacherPasswordHash = await hash("teacher123", 12);
 

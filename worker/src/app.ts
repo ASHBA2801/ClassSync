@@ -61,8 +61,11 @@ app.post("/jobs/scheduler", async (c) => {
 
 app.post("/jobs/document", async (c) => {
   const payload = await c.req.json<DocumentProcessingJobPayload>();
-  const result = await processDocument(payload);
-  return c.json(result);
+  // Ack immediately — Azure extraction can exceed the web app's dispatch timeout.
+  void processDocument(payload).catch((err) => {
+    console.error("[worker] document job failed", err);
+  });
+  return c.json({ accepted: true }, 202);
 });
 
 // GET is also accepted so Vercel Cron (which issues GET requests) can trigger these directly.

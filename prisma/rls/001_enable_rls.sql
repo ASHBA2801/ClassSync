@@ -11,6 +11,7 @@ DECLARE
     'ScheduleConstraint', 'SchoolScheduleConfig', 'ScheduleAlteration', 'ScheduleSwapGroup',
     'TeacherAlterationStat', 'TeacherAttendance', 'StudentAttendance',
     'LeaveRequest', 'Document', 'FeeStructure', 'FeeInvoice', 'Payment',
+    'SchoolSubscription', 'CoreModuleInvoice',
     'NotificationLog', 'PushSubscription', 'AIServiceKey',
     'Employee', 'EmployeeSalary', 'EmployeeBankAccount', 'PayrollRun', 'SalaryPayout',
     'SchoolEmployeeJobTypeConfig', 'SchoolCalendarDay', 'TransportRoute', 'SecurityVisitorLog',

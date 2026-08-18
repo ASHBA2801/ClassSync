@@ -186,6 +186,18 @@ enum PaymentProvider {
   STRIPE
 }
 
+enum CoreSubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum CoreInvoiceStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
 enum NotificationChannel {
   WEB_PUSH
   EMAIL
@@ -250,6 +262,8 @@ model School {
   libraryBooks        LibraryBook[]
   staffAttendances    StaffAttendance[]
   calendarDays        SchoolCalendarDay[]
+  coreSubscription    SchoolSubscription?
+  coreModuleInvoices  CoreModuleInvoice[]
 }
 
 model User {
@@ -755,6 +769,63 @@ model SchoolPaymentProviderConfig {
 
   @@unique([schoolId, provider])
   @@index([schoolId])
+}
+
+model CorePricingPlan {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  maxUsers    Int
+  priceAmount Decimal  @db.Decimal(10, 2)
+  currency    String   @default("INR")
+  interval    String   @default("YEAR")
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subscriptions SchoolSubscription[]
+  invoices      CoreModuleInvoice[]
+
+  @@index([isActive, sortOrder])
+}
+
+model SchoolSubscription {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  schoolId           String                 @unique @db.Uuid
+  planId             String                 @db.Uuid
+  status             CoreSubscriptionStatus @default(ACTIVE)
+  userLimit          Int
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  school School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  plan   CorePricingPlan @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+  @@index([status])
+}
+
+model CoreModuleInvoice {
+  id                String            @id @default(uuid()) @db.Uuid
+  schoolId          String            @db.Uuid
+  planId            String            @db.Uuid
+  amount            Decimal           @db.Decimal(10, 2)
+  status            CoreInvoiceStatus @default(PENDING)
+  provider          PaymentProvider?
+  externalOrderId   String?
+  externalPaymentId String?           @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  paidAt            DateTime?
+
+  school School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  plan   CorePricingPlan @relation(fields: [planId], references: [id])
+
+  @@index([schoolId, status])
+  @@index([externalOrderId])
 }
 
 model AIServiceKey {

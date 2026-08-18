@@ -1,9 +1,7 @@
 "use server";
 
-import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { requireRole } from "@/lib/rbac/guard";
-import { encrypt } from "@/lib/encryption";
 import { createAuditLog } from "@/lib/audit";
 
 interface WorkerHealth {
@@ -27,45 +25,6 @@ async function checkWorkerHealth(): Promise<WorkerHealth> {
   } catch (err) {
     return { up: false, error: err instanceof Error ? err.message : String(err) };
   }
-}
-
-const aiKeySchema = z.object({
-  provider: z.string(),
-  key: z.string(),
-  schoolId: z.string().uuid().optional(),
-});
-
-export async function saveAIServiceKeyAction(input: z.infer<typeof aiKeySchema>) {
-  const ctx = await requireRole(["SYSTEM_ADMIN"]);
-  const data = aiKeySchema.parse(input);
-
-  const record = await prisma.aIServiceKey.create({
-    data: {
-      provider: data.provider,
-      keyEncrypted: encrypt(data.key),
-      schoolId: data.schoolId,
-    },
-  });
-
-  await createAuditLog({
-    actorId: ctx.userId,
-    action: "ai.key_create",
-    schoolId: data.schoolId,
-    entityType: "AIServiceKey",
-    entityId: record.id,
-    metadata: { provider: data.provider },
-  });
-
-  return record;
-}
-
-export async function listAIServiceKeysAction() {
-  await requireRole(["SYSTEM_ADMIN"]);
-  return prisma.aIServiceKey.findMany({
-    where: { isActive: true },
-    include: { school: true },
-    orderBy: { createdAt: "desc" },
-  });
 }
 
 export async function searchGlobalUsersAction(query: string) {
