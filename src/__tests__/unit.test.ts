@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isWithinGeofence, haversineDistanceM } from "@/lib/geofence";
+import { getNextAttemptNumber, ATTENDANCE_RETRY_WINDOW_MS, ATTENDANCE_MAX_ATTEMPTS } from "@/lib/attendance/face-attendance";
 import {
   solveSchedule,
   validateSlotConflict,
@@ -310,9 +311,6 @@ describe("encryption", () => {
 });
 
 describe("attendance retry state machine", () => {
-  const { getNextAttemptNumber, ATTENDANCE_RETRY_WINDOW_MS, ATTENDANCE_MAX_ATTEMPTS } =
-    require("@/lib/attendance/face-attendance");
-
   it("increments attempt within window", () => {
     const last = { attemptNumber: 1, success: false, createdAt: new Date() };
     expect(getNextAttemptNumber(last)).toBe(2);

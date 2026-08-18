@@ -16,7 +16,7 @@
   --border-subtle: rgba(255, 255, 255, 0.06);
   --text-1: #f8fafc;
   --text-2: rgba(255, 255, 255, 0.72);
-  --text-3: rgba(255, 255, 255, 0.48);
+  --text-3: rgba(255, 255, 255, 0.58);
   --primary: #34d399;
   --primary-hover: #6ee7b7;
   --primary-fg: #042f2e;
@@ -152,6 +152,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur-lg));
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-card);
+  transform: translateZ(0);
 }
 
 .glass-sidebar {
@@ -161,6 +162,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur-lg));
   border-right: 1px solid var(--border);
   box-shadow: 4px 0 32px rgba(0, 0, 0, 0.25);
+  transform: translateZ(0);
 }
 
 .glass-header {
@@ -168,6 +170,7 @@
   backdrop-filter: blur(var(--glass-blur-sm));
   -webkit-backdrop-filter: blur(var(--glass-blur-sm));
   border-bottom: 1px solid var(--border);
+  transform: translateZ(0);
 }
 
 .glass-panel {
@@ -186,6 +189,7 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
+  transform: translateZ(0);
 }
 
 .glass-nested {
@@ -390,6 +394,18 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+a {
+  text-underline-offset: 4px;
+}
+
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Typography scale utilities ───────────────────────────────────── */
 
 .text-xs-erp   { font-size: 12px; line-height: 1.5; }
@@ -438,4 +454,17 @@ gmp-place-autocomplete {
   border-radius: var(--radius-sm);
   background-color: var(--surface-input);
   color-scheme: dark;
+}
+
+/* ── Motion Sensitivity & Reduced Motion ───────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

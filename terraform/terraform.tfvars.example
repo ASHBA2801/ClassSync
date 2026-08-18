@@ -1,0 +1,37 @@
+# Example terraform.tfvars configuration for ClassSync AWS Deployment
+aws_region            = "ap-south-1"
+environment           = "production"
+app_name              = "classsync"
+
+# Database Configuration
+db_instance_class     = "db.t4g.micro"
+db_allocated_storage  = 20
+db_name               = "classsync"
+db_username           = "classsync_admin"
+db_password           = "SUPER_SECURE_PASSWORD_CHANGE_ME_123!"
+
+# Application Secrets (Must match requirements)
+auth_secret           = "32_CHARACTER_LONG_RANDOM_SECRET_KEY_FOR_AUTH_JS"
+encryption_key        = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" # 64-char hex string (32 bytes)
+worker_secret         = "RANDOM_WORKER_SECRET_FOR_INTER_SERVICE_COMMUNICATION"
+
+# Scaling & Capacity
+ecs_web_cpu           = 512
+ecs_web_memory        = 1024
+ecs_web_desired_count = 2
+
+ecs_worker_cpu        = 512
+ecs_worker_memory     = 1024
+ecs_worker_desired_count = 1
+
+# Custom Domain & SSL (Optional)
+domain_name           = "" # e.g. "app.classsync.org"
+certificate_arn       = "" # e.g. "arn:aws:acm:ap-south-1:123456789012:certificate/abc-123"
+
+# Optional Keys
+vapid_public_key      = ""
+vapid_private_key     = ""
+vapid_subject         = "mailto:admin@classsync.app"
+razorpay_platform_key = ""
+google_maps_api_key   = ""
+google_maps_map_id    = ""

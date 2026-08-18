@@ -1,0 +1,121 @@
+name: Build & Deploy to AWS Cloud
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test:
+    name: Run Tests & Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run db:generate
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Vitest Unit Tests
+        run: npm test
+
+  deploy:
+    name: Build & Deploy to AWS ECS Fargate
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+      CLUSTER_NAME: ${{ secrets.ECS_CLUSTER_NAME || 'classsync-production-cluster' }}
+      WEB_SERVICE_NAME: ${{ secrets.ECS_WEB_SERVICE || 'classsync-production-web' }}
+      WORKER_SERVICE_NAME: ${{ secrets.ECS_WORKER_SERVICE || 'classsync-production-worker' }}
+      MIGRATION_TASK_DEF: ${{ secrets.ECS_MIGRATION_TASK || 'classsync-production-migration' }}
+      WEB_ECR_REPO: ${{ secrets.ECR_WEB_REPO || 'classsync-web' }}
+      WORKER_ECR_REPO: ${{ secrets.ECR_WORKER_REPO || 'classsync-worker' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Web Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$WEB_ECR_REPO:$IMAGE_TAG -t $ECR_REGISTRY/$WEB_ECR_REPO:latest -f Dockerfile .
+          docker push $ECR_REGISTRY/$WEB_ECR_REPO:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$WEB_ECR_REPO:latest
+
+      - name: Build and Push Worker Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$WORKER_ECR_REPO:$IMAGE_TAG -t $ECR_REGISTRY/$WORKER_ECR_REPO:latest -f worker/Dockerfile .
+          docker push $ECR_REGISTRY/$WORKER_ECR_REPO:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$WORKER_ECR_REPO:latest
+
+      - name: Execute Database Migrations (Prisma & RLS)
+        run: |
+          SUBNETS=$(aws ec2 describe-subnets --filters "Name=tag:Type,Values=Private" --query "Subnets[*].Id" --output text | tr '\t' ',')
+          SECURITY_GROUPS=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=*ecs-web-sg*" --query "SecurityGroups[*].GroupId" --output text | tr '\t' ',')
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster $CLUSTER_NAME \
+            --task-definition $MIGRATION_TASK_DEF \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=DISABLED}" \
+            --query "tasks[0].taskArn" --output text)
+
+          echo "Started Database Migration Task: $TASK_ARN"
+          echo "Waiting for migration completion..."
+
+          aws ecs wait tasks-stopped --cluster $CLUSTER_NAME --tasks $TASK_ARN
+
+          EXIT_CODE=$(aws ecs describe-tasks --cluster $CLUSTER_NAME --tasks $TASK_ARN --query "tasks[0].containers[0].exitCode" --output text)
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Database migration task failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          echo "Database migrations and RLS policies applied successfully!"
+
+      - name: Deploy Web & Worker to Amazon ECS
+        run: |
+          echo "Deploying new Web App tasks..."
+          aws ecs update-service --cluster $CLUSTER_NAME --service $WEB_SERVICE_NAME --force-new-deployment
+
+          echo "Deploying new Worker tasks..."
+          aws ecs update-service --cluster $CLUSTER_NAME --service $WORKER_SERVICE_NAME --force-new-deployment
+
+          echo "Waiting for services to reach steady state..."
+          aws ecs wait services-stable --cluster $CLUSTER_NAME --services $WEB_SERVICE_NAME $WORKER_SERVICE_NAME
+
+          echo "Deployment completed successfully!"

@@ -28,6 +28,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Terraform & IaC Secrets
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!terraform.tfvars.example
+
 # Environment & Secrets
 .env
 .env*.local

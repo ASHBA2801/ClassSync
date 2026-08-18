@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // Keep Turbopack rooted at this app so it resolves `next` correctly on Windows
   // paths (including directories with spaces).
   turbopack: {
