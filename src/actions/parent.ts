@@ -5,7 +5,7 @@ import { prisma, withTenantContext, withSystemAdminContext } from "@/lib/db/pris
 import { requireSchoolContext, requireSchoolPermission, requireAuth } from "@/lib/rbac/guard";
 import { ForbiddenError } from "@/lib/errors";
 import { PERMISSIONS } from "@/lib/rbac/permissions";
-import { getPresignedUploadUrl, buildS3Key } from "@/lib/storage/s3";
+import { getPresignedUploadUrl, buildS3Key, getPresignedDownloadUrl } from "@/lib/storage/s3";
 import { enqueueNotification } from "@/lib/notifications";
 import { dispatchDocumentProcessing } from "@/lib/jobs/dispatch";
 import { applyLeaveSubstitutions } from "@/lib/scheduler/smart-scheduler";
@@ -83,7 +83,7 @@ const confirmDocumentSchema = z.object({
   name: z.string(),
   s3Key: z.string(),
   mimeType: z.string(),
-  documentType: z.enum(["AADHAAR", "BIRTH_CERTIFICATE", "COMMUNITY_CERTIFICATE", "MARKSHEET"]).optional(),
+  documentType: z.enum(["AADHAAR", "BIRTH_CERTIFICATE", "COMMUNITY_CERTIFICATE", "MARKSHEET", "MEDICAL_CERTIFICATE"]).optional(),
 });
 
 export async function confirmDocumentUploadAction(input: z.infer<typeof confirmDocumentSchema>) {
@@ -102,7 +102,6 @@ export async function confirmDocumentUploadAction(input: z.infer<typeof confirmD
       mimeType: data.mimeType,
     };
 
-    // include new fields only if Prisma client supports them (avoid runtime errors before migration)
     try {
       const model = (prisma as any)?._dmmf?.modelMap?.Document;
       const hasDocumentType = !!model?.fields?.find((f: any) => f.name === "documentType");
@@ -110,13 +109,12 @@ export async function confirmDocumentUploadAction(input: z.infer<typeof confirmD
       if (hasDocumentType && data.documentType) createData.documentType = data.documentType;
       if (hasUploaderType) createData.uploaderType = uploaderType;
     } catch (err) {
-      // ignore and proceed without optional fields
+      // ignore
     }
 
     return tx.document.create({ data: createData });
   });
 
-  // Process document (OCR + extraction) on the worker service, deferred until after the response.
   dispatchDocumentProcessing({
     s3Key: data.s3Key,
     mimeType: data.mimeType,
@@ -131,12 +129,32 @@ export async function confirmDocumentUploadAction(input: z.infer<typeof confirmD
   return created;
 }
 
+const medicalCertUploadSchema = z.object({
+  filename: z.string(),
+  mimeType: z.string(),
+});
+
+export async function getMedicalCertUploadUrlAction(input: z.infer<typeof medicalCertUploadSchema>) {
+  const ctx = await requireSchoolPermission(PERMISSIONS.LEAVE_REQUEST);
+  const data = medicalCertUploadSchema.parse(input);
+  const mimeType = data.mimeType || "application/pdf";
+
+  const key = buildS3Key(`medical_certificates/${ctx.schoolId}/${ctx.userId}`, data.filename);
+  const uploadUrl = await getPresignedUploadUrl(key, mimeType);
+
+  return { uploadUrl, key };
+}
+
 const leaveSchema = z
   .object({
     studentId: z.string().uuid(),
     startDate: isoDateString,
     endDate: isoDateString,
     reason: z.string().min(3),
+    isHalfDay: z.boolean().optional().default(false),
+    halfDaySession: z.enum(["FIRST_HALF", "SECOND_HALF"]).optional(),
+    medicalCertS3Key: z.string().optional(),
+    medicalCertName: z.string().optional(),
   })
   .refine((data) => data.endDate >= data.startDate, {
     message: "End date must be on or after start date",
@@ -157,6 +175,10 @@ export async function submitParentLeaveAction(input: z.infer<typeof leaveSchema>
         startDate: parseIsoDate(data.startDate),
         endDate: parseIsoDate(data.endDate),
         reason: data.reason,
+        isHalfDay: data.isHalfDay ?? false,
+        halfDaySession: data.halfDaySession,
+        medicalCertS3Key: data.medicalCertS3Key,
+        medicalCertName: data.medicalCertName,
       },
     });
   });
@@ -181,11 +203,28 @@ export async function submitParentLeaveAction(input: z.infer<typeof leaveSchema>
 export async function listParentLeaveRequestsAction() {
   const ctx = await requireSchoolContext();
   return withTenantContext(ctx.schoolId, async (tx) => {
-    return tx.leaveRequest.findMany({
+    const requests = await tx.leaveRequest.findMany({
       where: { requesterId: ctx.userId, requesterType: "PARENT" },
       include: { student: true },
       orderBy: { createdAt: "desc" },
     });
+
+    return Promise.all(
+      requests.map(async (r) => {
+        let medicalCertUrl: string | undefined;
+        if (r.medicalCertS3Key) {
+          try {
+            medicalCertUrl = await getPresignedDownloadUrl(r.medicalCertS3Key);
+          } catch {
+            medicalCertUrl = undefined;
+          }
+        }
+        return {
+          ...r,
+          medicalCertUrl,
+        };
+      }),
+    );
   });
 }
 
@@ -203,7 +242,6 @@ export async function listPendingDocumentsAction() {
 export async function listParentDocumentsAction() {
   const ctx = await requireSchoolContext();
   return withTenantContext(ctx.schoolId, async (tx) => {
-    // documents uploaded by this parent or for students linked to this parent
     const relationships = await tx.guardianRelationship.findMany({ where: { parentId: ctx.userId, schoolId: ctx.schoolId } });
     const studentIds = relationships.map((r) => r.studentId);
 
@@ -219,7 +257,6 @@ export async function listParentDocumentsAction() {
   });
 }
 
-/** Documents for students in class sections assigned to the current teacher. */
 export async function listTeacherStudentDocumentsAction() {
   const ctx = await requireSchoolContext();
   if (ctx.role !== "TEACHER") {

@@ -82,6 +82,7 @@ export async function createProviderPaymentOrder(
   amount: number,
   invoiceId: string,
   receipt: string,
+  options?: { returnPath?: string; productName?: string },
 ): Promise<PaymentOrderResult> {
   const config = await getProviderConfig(schoolId, provider);
   if (!config) {
@@ -89,7 +90,7 @@ export async function createProviderPaymentOrder(
   }
 
   const adapter = adapters[provider];
-  return adapter.createOrder(config, amount, invoiceId, receipt, schoolId);
+  return adapter.createOrder(config, amount, invoiceId, receipt, schoolId, options);
 }
 
 export function getExternalOrderId(result: PaymentOrderResult): string {

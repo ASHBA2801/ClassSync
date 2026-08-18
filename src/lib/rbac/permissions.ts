@@ -27,10 +27,10 @@ export const PERMISSIONS = {
   BANK_DETAILS_VIEW: "bank_details:view",
   PAYOUTS_CONFIGURE: "payouts:configure",
   PAYROLL_VIEW: "payroll:view",
+  BILLING_MANAGE: "billing:manage",
   SYSTEM_ADMIN: "system:admin",
   AUDIT_VIEW: "audit:view",
   MONITORING_VIEW: "monitoring:view",
-  AI_KEYS_MANAGE: "ai:keys:manage",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -58,6 +58,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
     PERMISSIONS.PAYROLL_EXECUTE,
     PERMISSIONS.BANK_DETAILS_VIEW,
     PERMISSIONS.PAYOUTS_CONFIGURE,
+    PERMISSIONS.BILLING_MANAGE,
     PERMISSIONS.AUDIT_VIEW,
   ],
   TEACHER: [
