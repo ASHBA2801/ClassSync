@@ -1,13 +1,19 @@
-import { PrismaClient, type Role } from "@prisma/client";
+import { Prisma, PrismaClient, type Role } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+const transactionOptions = {
+  maxWait: 10_000,
+  timeout: 20_000,
+} as const;
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    transactionOptions,
   });
 
 if (process.env.NODE_ENV !== "production") {
@@ -31,10 +37,24 @@ export async function withTenantContext<T>(
   fn: (tx: PrismaClient) => Promise<T>,
   bypassRls = false,
 ): Promise<T> {
-  return prisma.$transaction(async (tx) => {
-    await setTenantContext(tx, schoolId, bypassRls);
-    return fn(tx as unknown as PrismaClient);
-  });
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await setTenantContext(tx, schoolId, bypassRls);
+      return fn(tx as unknown as PrismaClient);
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2028" &&
+      error.message.includes("Unable to start a transaction in the given time")
+    ) {
+      return prisma.$transaction(async (tx) => {
+        await setTenantContext(tx, schoolId, bypassRls);
+        return fn(tx as unknown as PrismaClient);
+      });
+    }
+    throw error;
+  }
 }
 
 export async function withSystemAdminContext<T>(
