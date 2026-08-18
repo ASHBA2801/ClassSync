@@ -17,6 +17,7 @@ import {
   Clock,
   Upload,
   CreditCard,
+  Key,
   type LucideIcon,
 } from "lucide-react";
 import type { NavIconName } from "@/lib/nav-config";
@@ -38,6 +39,7 @@ export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
   clock: Clock,
   upload: Upload,
   "credit-card": CreditCard,
+  key: Key,
 };
 
 export function getNavIcon(name: NavIconName): LucideIcon {

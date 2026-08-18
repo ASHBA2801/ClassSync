@@ -74,6 +74,9 @@ Write-Host "Building worker image via Cloud Build (this can take a few minutes).
 gcloud builds submit . `
   --config worker/cloudbuild.yaml `
   --substitutions "_IMAGE=$Image"
+if ($LASTEXITCODE -ne 0) {
+  throw "Cloud Build failed. Aborting deploy so Cloud Run is not updated with a stale image."
+}
 
 Write-Host "Deploying $Service to Cloud Run (scale-to-zero)..."
 
@@ -114,6 +117,9 @@ gcloud run deploy $Service `
   --timeout 300 `
   --cpu-boost `
   --set-env-vars $EnvCsv
+if ($LASTEXITCODE -ne 0) {
+  throw "Cloud Run deployment failed."
+}
 
 $Url = gcloud run services describe $Service --region $Region --format="value(status.url)"
 Write-Host ""

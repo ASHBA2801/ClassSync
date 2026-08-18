@@ -7,16 +7,16 @@ const EXTRACTION_FIELDS_OMIT = {
   extractionConfidence: true,
 } satisfies Prisma.DocumentOmit;
 
-export async function findManyDocuments(
-  tx: PrismaClient,
-  args: Prisma.DocumentFindManyArgs,
-) {
+export async function findManyDocuments<T extends Prisma.DocumentFindManyArgs>(
+  tx: any,
+  args: Prisma.SelectSubset<T, Prisma.DocumentFindManyArgs>,
+): Promise<Prisma.DocumentGetPayload<T>[]> {
   try {
     return await tx.document.findMany(args);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
-      return tx.document.findMany({
-        ...args,
+      return await tx.document.findMany({
+        ...(args as any),
         omit: EXTRACTION_FIELDS_OMIT,
       });
     }

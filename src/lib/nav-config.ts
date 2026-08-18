@@ -16,7 +16,8 @@ export type NavIconName =
   | "calendar"
   | "clock"
   | "upload"
-  | "credit-card";
+  | "credit-card"
+  | "key";
 
 export interface NavItem {
   href: string;

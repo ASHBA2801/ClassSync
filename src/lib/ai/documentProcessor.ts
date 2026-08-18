@@ -51,19 +51,6 @@ function isRetryableAzureError(err: unknown): boolean {
 }
 
 async function fetchAzure(url: string, body: string, azureKey: string): Promise<Response> {
-  let dispatcher: unknown;
-  try {
-    // @ts-ignore - undici is optionally available in Node environments
-    const undici = await import("undici");
-    dispatcher = new undici.Agent({
-      connectTimeout: 30_000,
-      headersTimeout: AZURE_TIMEOUT_MS,
-      bodyTimeout: AZURE_TIMEOUT_MS,
-    });
-  } catch {
-    dispatcher = undefined;
-  }
-
   let lastErr: unknown;
   for (let attempt = 1; attempt <= AZURE_ATTEMPTS; attempt++) {
     try {
@@ -75,8 +62,7 @@ async function fetchAzure(url: string, body: string, azureKey: string): Promise<
         },
         body,
         signal: AbortSignal.timeout(AZURE_TIMEOUT_MS),
-        ...(dispatcher ? { dispatcher } : {}),
-      } as RequestInit);
+      });
     } catch (err) {
       lastErr = err;
       if (!isRetryableAzureError(err) || attempt === AZURE_ATTEMPTS) throw err;
